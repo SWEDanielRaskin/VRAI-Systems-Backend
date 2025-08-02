@@ -1,0 +1,69 @@
+(venv) C:\Users\snowm\receptionist-idfk\project>python main.py
+INFO:__main__:🚀 Starting application with multiprocessing...
+INFO:__main__:✅ Flask server process started
+INFO:__main__:✅ WebSocket server process started
+INFO:__mp_main__:🔌 Starting WebSocket server on port 8080
+INFO:websocket_server:Starting WebSocket server on localhost:8080...
+INFO:websockets.server:server listening on [::1]:8080
+INFO:websockets.server:server listening on 127.0.0.1:8080
+INFO:websocket_server:WebSocket server running on ws://localhost:8080
+INFO:websocket_server:Make sure to expose this with: ngrok http 8080
+INFO:database_service:✅ Appointments table is up to date
+INFO:database_service:✅ Database initialized successfully
+INFO:knowledge_base_service:✅ OpenAI client initialized successfully
+INFO:knowledge_base_service:✅ Knowledge base tables initialized
+INFO:database_service:✅ Appointments table is up to date
+INFO:database_service:✅ Database initialized successfully
+INFO:database_service:✅ Appointments table is up to date
+INFO:database_service:✅ Database initialized successfully
+INFO:googleapiclient.discovery_cache:file_cache is only supported with oauth2client<4.0.0
+INFO:google_calendar_service:✅ Google Calendar service initialized successfully
+INFO:database_service:✅ Appointments table is up to date
+INFO:database_service:✅ Database initialized successfully
+INFO:database_service:✅ Appointments table is up to date
+INFO:database_service:✅ Database initialized successfully
+INFO:message_scheduler:📝 Scheduled messages database initialized
+INFO:apscheduler.scheduler:Scheduler started
+INFO:message_scheduler:✅ Message scheduler initialized with persistence
+INFO:appointment_service:👥 Loaded specialist counter: 0
+INFO:appointment_service:👥 Updated specialists from database: ['Carla Thomas']
+INFO:knowledge_base_service:✅ OpenAI client initialized successfully
+INFO:knowledge_base_service:✅ Knowledge base tables initialized
+INFO:database_service:✅ Appointments table is up to date
+INFO:database_service:✅ Database initialized successfully
+INFO:database_service:✅ Appointments table is up to date
+INFO:database_service:✅ Database initialized successfully
+INFO:database_service:✅ Appointments table is up to date
+INFO:database_service:✅ Database initialized successfully
+INFO:message_scheduler:📝 Scheduled messages database initialized
+INFO:apscheduler.scheduler:Scheduler started
+INFO:message_scheduler:✅ Message scheduler initialized with persistence
+INFO:googleapiclient.discovery_cache:file_cache is only supported with oauth2client<4.0.0
+INFO:google_calendar_service:✅ Google Calendar service initialized successfully
+INFO:database_service:✅ Appointments table is up to date
+INFO:database_service:✅ Database initialized successfully
+INFO:database_service:✅ Appointments table is up to date
+INFO:database_service:✅ Database initialized successfully
+INFO:message_scheduler:📝 Scheduled messages database initialized
+INFO:apscheduler.scheduler:Scheduler started
+INFO:message_scheduler:✅ Message scheduler initialized with persistence
+INFO:appointment_service:👥 Loaded specialist counter: 0
+INFO:appointment_service:👥 Updated specialists from database: ['Carla Thomas']
+INFO:knowledge_base_service:✅ OpenAI client initialized successfully
+INFO:knowledge_base_service:✅ Knowledge base tables initialized
+INFO:apscheduler.scheduler:Adding job tentatively -- it will be properly scheduled when the scheduler starts
+INFO:apscheduler.scheduler:Adding job tentatively -- it will be properly scheduled when the scheduler starts
+INFO:apscheduler.scheduler:Added job "trigger_daily_archive" to job store "default"
+INFO:apscheduler.scheduler:Added job "trigger_weekly_archive" to job store "default"
+INFO:apscheduler.scheduler:Scheduler started
+INFO:apscheduler.scheduler:Adding job tentatively -- it will be properly scheduled when the scheduler starts
+INFO:apscheduler.scheduler:Added job "AppointmentService.sync_appointments_with_google_calendar" to job store "default"
+INFO:apscheduler.scheduler:Scheduler started
+INFO:__mp_main__:🚀 Starting Flask HTTP server on port 5000
+ * Serving Flask app 'app'
+ * Debug mode: off
+INFO:werkzeug:WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.11:5000
+INFO:werkzeug:Press CTRL+C to quit
