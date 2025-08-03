@@ -75,6 +75,7 @@ class DatabaseService:
                     transcript TEXT,  -- JSON string of full conversation
                     summary TEXT,  -- AI-generated summary
                     status TEXT DEFAULT 'active',  -- 'active', 'completed', 'missed'
+                    is_business_hours BOOLEAN DEFAULT 0,  -- Track if call was during business hours
                     created_at TEXT NOT NULL
                 )
             ''')
@@ -132,6 +133,16 @@ class DatabaseService:
                     ALTER TABLE messages ADD COLUMN last_notification_analysis_timestamp TEXT
                 ''')
                 logger.info("✅ Added last_notification_analysis_timestamp column to messages table")
+            
+            # Add is_business_hours column to calls table if it doesn't exist
+            cursor.execute('''
+                SELECT name FROM pragma_table_info('calls') WHERE name='is_business_hours'
+            ''')
+            if not cursor.fetchone():
+                cursor.execute('''
+                    ALTER TABLE calls ADD COLUMN is_business_hours BOOLEAN DEFAULT 0
+                ''')
+                logger.info("✅ Added is_business_hours column to calls table")
             
             # Notifications table
             cursor.execute('''
