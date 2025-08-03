@@ -1559,27 +1559,92 @@ def debug_database():
 
 @app.route('/database-ui')
 def database_ui():
-    """Redirect to the SQLite web interface"""
-    password = os.environ.get('SQLITE_WEB_UI_PASSWORD', 'admin')
-    return redirect(f'/sqlite-web?password={password}')
+    """Redirect to the database viewer"""
+    return redirect('/db-viewer')
 
-# Mount SQLite Web interface
-try:
-    from sqlite_web import sqlite_web
-    from config import DATABASE_NAME
-    
-    # Initialize SQLite Web with our database
-    sqlite_web.initialize_app(DATABASE_NAME, password=os.environ.get('SQLITE_WEB_UI_PASSWORD', 'admin'))
-    
-    # Register the SQLite Web app as a blueprint
-    app.register_blueprint(sqlite_web.app, url_prefix='/sqlite-web')
-    
-    logger.info("✅ SQLite Web interface mounted at /sqlite-web")
-    
-except ImportError:
-    logger.warning("⚠️ sqlite-web package not available. Database UI will not be available.")
-except Exception as e:
-    logger.error(f"❌ Error mounting SQLite Web interface: {str(e)}")
+# Simple database viewer interface
+@app.route('/db-viewer')
+def db_viewer():
+    """Simple database viewer interface"""
+    try:
+        import sqlite3
+        from config import DATABASE_NAME
+        
+        conn = sqlite3.connect(DATABASE_NAME)
+        cursor = conn.cursor()
+        
+        # Get list of all tables
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = cursor.fetchall()
+        
+        html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Database Viewer</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                .table-section { margin: 20px 0; border: 1px solid #ddd; padding: 15px; }
+                .table-name { font-size: 18px; font-weight: bold; color: #333; margin-bottom: 10px; }
+                .row-count { color: #666; margin-bottom: 10px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f2f2f2; font-weight: bold; }
+                tr:nth-child(even) { background-color: #f9f9f9; }
+                .no-data { color: #999; font-style: italic; }
+            </style>
+        </head>
+        <body>
+            <h1>Database Viewer - """ + DATABASE_NAME + """</h1>
+            <p>Last updated: """ + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + """</p>
+        """
+        
+        for table in tables:
+            table_name = table[0]
+            cursor.execute(f"SELECT * FROM {table_name}")
+            rows = cursor.fetchall()
+            
+            # Get column names
+            cursor.execute(f"PRAGMA table_info({table_name})")
+            columns = [col[1] for col in cursor.fetchall()]
+            
+            html += f"""
+            <div class="table-section">
+                <div class="table-name">{table_name}</div>
+                <div class="row-count">{len(rows)} rows</div>
+                <table>
+                    <thead>
+                        <tr>
+            """
+            
+            for col in columns:
+                html += f"<th>{col}</th>"
+            
+            html += "</tr></thead><tbody>"
+            
+            if rows:
+                for row in rows:
+                    html += "<tr>"
+                    for value in row:
+                        html += f"<td>{value if value is not None else '<em>NULL</em>'}</td>"
+                    html += "</tr>"
+            else:
+                html += f'<tr><td colspan="{len(columns)}" class="no-data">No data</td></tr>'
+            
+            html += "</tbody></table></div>"
+        
+        conn.close()
+        
+        html += """
+        </body>
+        </html>
+        """
+        
+        return html
+        
+    except Exception as e:
+        logger.error(f"❌ Error in db_viewer: {str(e)}")
+        return f"<h1>Error</h1><p>{str(e)}</p>", 500
 
 if __name__ == '__main__':
     # Start Flask app (HTTP only)
