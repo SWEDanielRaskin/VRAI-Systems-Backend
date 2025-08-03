@@ -36,25 +36,11 @@ class GoogleCalendarService:
     def _initialize_service(self):
         """Initialize Google Calendar service with credentials"""
         try:
-            # Try to get credentials from environment variable first
-            credentials_json = os.environ.get('GOOGLE_CREDENTIALS_JSON')
-            
-            if credentials_json:
-                # Use environment variable
-                import json
-                credentials_info = json.loads(credentials_json)
-                credentials = service_account.Credentials.from_service_account_info(
-                    credentials_info,
-                    scopes=['https://www.googleapis.com/auth/calendar']
-                )
-                logger.info("✅ Google Calendar service initialized with environment credentials")
-            else:
-                # Fall back to file
-                credentials = service_account.Credentials.from_service_account_file(
-                    self.credentials_file,
-                    scopes=['https://www.googleapis.com/auth/calendar']
-                )
-                logger.info("✅ Google Calendar service initialized with file credentials")
+            # Load service account credentials
+            credentials = service_account.Credentials.from_service_account_file(
+                self.credentials_file,
+                scopes=['https://www.googleapis.com/auth/calendar']
+            )
             
             # Build the service
             self.service = build('calendar', 'v3', credentials=credentials)
