@@ -1506,6 +1506,57 @@ def debug_call_events():
         logger.error(f"❌ Error in debug_call_events: {str(e)}")
         return Response(status=500)
 
+@app.route('/debug/database', methods=['GET'])
+def debug_database():
+    """Debug endpoint to view database contents"""
+    try:
+        import sqlite3
+        from config import DATABASE_NAME
+        
+        conn = sqlite3.connect(DATABASE_NAME)
+        cursor = conn.cursor()
+        
+        # Get list of all tables
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = cursor.fetchall()
+        
+        database_contents = {}
+        
+        for table in tables:
+            table_name = table[0]
+            cursor.execute(f"SELECT * FROM {table_name}")
+            rows = cursor.fetchall()
+            
+            # Get column names
+            cursor.execute(f"PRAGMA table_info({table_name})")
+            columns = [col[1] for col in cursor.fetchall()]
+            
+            # Convert rows to list of dicts
+            table_data = []
+            for row in rows:
+                row_dict = {}
+                for i, value in enumerate(row):
+                    row_dict[columns[i]] = value
+                table_data.append(row_dict)
+            
+            database_contents[table_name] = {
+                'columns': columns,
+                'row_count': len(table_data),
+                'data': table_data
+            }
+        
+        conn.close()
+        
+        return jsonify({
+            'database_path': DATABASE_NAME,
+            'tables': database_contents,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error in debug_database: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     # Start Flask app (HTTP only)
     port = int(os.environ.get('PORT', 5000))
