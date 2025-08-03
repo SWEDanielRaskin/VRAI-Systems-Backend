@@ -1557,6 +1557,30 @@ def debug_database():
         logger.error(f"❌ Error in debug_database: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/database-ui')
+def database_ui():
+    """Redirect to the SQLite web interface"""
+    password = os.environ.get('SQLITE_WEB_UI_PASSWORD', 'admin')
+    return redirect(f'/sqlite-web?password={password}')
+
+# Mount SQLite Web interface
+try:
+    from sqlite_web import sqlite_web
+    from config import DATABASE_NAME
+    
+    # Initialize SQLite Web with our database
+    sqlite_web.initialize_app(DATABASE_NAME, password=os.environ.get('SQLITE_WEB_UI_PASSWORD', 'admin'))
+    
+    # Mount the SQLite Web app at /sqlite-web
+    app.mount('/sqlite-web', sqlite_web.app)
+    
+    logger.info("✅ SQLite Web interface mounted at /sqlite-web")
+    
+except ImportError:
+    logger.warning("⚠️ sqlite-web package not available. Database UI will not be available.")
+except Exception as e:
+    logger.error(f"❌ Error mounting SQLite Web interface: {str(e)}")
+
 if __name__ == '__main__':
     # Start Flask app (HTTP only)
     port = int(os.environ.get('PORT', 5000))
