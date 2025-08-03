@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-from flask import Flask, request, Response, stream_with_context, jsonify
+from flask import Flask, request, Response, stream_with_context, jsonify, redirect
 from flask_cors import CORS
 import os
 import json
@@ -1571,8 +1571,8 @@ try:
     # Initialize SQLite Web with our database
     sqlite_web.initialize_app(DATABASE_NAME, password=os.environ.get('SQLITE_WEB_UI_PASSWORD', 'admin'))
     
-    # Mount the SQLite Web app at /sqlite-web
-    app.mount('/sqlite-web', sqlite_web.app)
+    # Register the SQLite Web app as a blueprint
+    app.register_blueprint(sqlite_web.app, url_prefix='/sqlite-web')
     
     logger.info("✅ SQLite Web interface mounted at /sqlite-web")
     
