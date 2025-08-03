@@ -1,5 +1,4 @@
-import os #yaaaaaaaaa
-
+import os
 from datetime import datetime
 
 # Business Information
