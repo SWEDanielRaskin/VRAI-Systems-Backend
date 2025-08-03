@@ -131,23 +131,55 @@ def broadcast_event(event_data):
 # Move DatabaseService import here to avoid circular import
 from database_service import DatabaseService
 
-# Initialize services
-sms_service = SMSService()
-db = DatabaseService(broadcast_event=broadcast_event)
-ai_receptionist = AIReceptionist(database_service=db)  # FIXED: Pass database service
-call_tracker = CallTrackingService()
-message_scheduler = MessageScheduler()
-ai_summarizer = AISummarizer(database_service=db)  # NEW: Initialize AI summarizer with database service
+# Global variables for services (will be initialized lazily)
+sms_service = None
+db = None
+ai_receptionist = None
+call_tracker = None
+message_scheduler = None
+ai_summarizer = None
+appointment_service = None
+kb_service = None
 
-# Initialize appointment service with database
-appointment_service = AppointmentService(database_service=db)
+def initialize_services():
+    """Initialize all services lazily"""
+    global sms_service, db, ai_receptionist, call_tracker, message_scheduler, ai_summarizer, appointment_service, kb_service
+    
+    if db is None:
+        db = DatabaseService(broadcast_event=broadcast_event)
+        logger.info("✅ Database service initialized")
+    
+    if sms_service is None:
+        sms_service = SMSService()
+        logger.info("✅ SMS service initialized")
+    
+    if ai_receptionist is None:
+        ai_receptionist = AIReceptionist(database_service=db)
+        logger.info("✅ AI receptionist initialized")
+    
+    if call_tracker is None:
+        call_tracker = CallTrackingService()
+        logger.info("✅ Call tracker initialized")
+    
+    if message_scheduler is None:
+        message_scheduler = MessageScheduler()
+        logger.info("✅ Message scheduler initialized")
+    
+    if ai_summarizer is None:
+        ai_summarizer = AISummarizer(database_service=db)
+        logger.info("✅ AI summarizer initialized")
+    
+    if appointment_service is None:
+        appointment_service = AppointmentService(database_service=db)
+        logger.info("✅ Appointment service initialized")
+    
+    if kb_service is None:
+        kb_service = KnowledgeBaseService(database_service=db)
+        logger.info("✅ Knowledge base service initialized")
 
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'csv', 'xlsx'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-# Initialize knowledge base service
-kb_service = KnowledgeBaseService(database_service=db)
 
 # Utility to check allowed file extensions
 def allowed_file(filename):
@@ -875,23 +907,25 @@ def send_manual_sms():
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Health check endpoint with business hours status"""
-    is_business_hours = get_business_hours_status()
-    active_calls = call_tracker.get_active_calls_count()
-    
-    # Get override setting from database
-    override = db.get_setting('business_hours_override') or ''
-    
-    status = {
-        'status': 'healthy',
-        'business_hours': is_business_hours,
-        'mode': 'business_hours' if is_business_hours else 'after_hours',
-        'override': override,
-        'active_calls_tracked': active_calls,
-        'timestamp': datetime.now().isoformat()
-    }
-    
-    return Response(json.dumps(status), mimetype='application/json')
+    """Simple health check endpoint for Railway"""
+    try:
+        # Initialize services if not already done
+        initialize_services()
+        
+        status = {
+            'status': 'healthy',
+            'timestamp': datetime.now().isoformat(),
+            'message': 'Service is running',
+            'services_initialized': True
+        }
+        return Response(json.dumps(status), mimetype='application/json')
+    except Exception as e:
+        logger.error(f"Health check error: {e}")
+        return Response(json.dumps({
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), mimetype='application/json', status=500)
 
 @app.route('/debug/message-cache', methods=['GET'])
 def debug_message_cache():
@@ -908,6 +942,27 @@ def debug_message_cache():
     except Exception as e:
         logger.error(f"Debug cache check failed: {str(e)}")
         return Response(json.dumps({
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), mimetype='application/json', status=500)
+
+@app.route('/test', methods=['GET'])
+def test_endpoint():
+    """Simple test endpoint"""
+    try:
+        # Initialize services if not already done
+        initialize_services()
+        
+        return Response(json.dumps({
+            'status': 'ok',
+            'message': 'Flask app is working',
+            'timestamp': datetime.now().isoformat(),
+            'services_initialized': True
+        }), mimetype='application/json')
+    except Exception as e:
+        logger.error(f"Test endpoint error: {e}")
+        return Response(json.dumps({
+            'status': 'error',
             'error': str(e),
             'timestamp': datetime.now().isoformat()
         }), mimetype='application/json', status=500)

@@ -33,23 +33,30 @@ def run_websocket_in_thread():
 if __name__ == '__main__':
     logger.info("🚀 Starting application...")
     
-    # Initialize databases before starting servers
-    logger.info("🔧 Initializing databases...")
-    try:
-        from init_databases import main as init_databases
-        init_databases()
-        logger.info("✅ Database initialization complete")
-    except Exception as e:
-        logger.error(f"❌ Database initialization failed: {e}")
-        # Continue anyway - databases might already exist
+    # Start Flask server first (for Railway health checks)
+    from app import app
+    port = int(os.environ.get('PORT', 5000))
+    logger.info(f"🚀 Starting Flask HTTP server on port {port}")
+    
+    # Initialize databases in background
+    def init_databases_background():
+        logger.info("🔧 Initializing databases...")
+        try:
+            from init_databases import main as init_databases
+            init_databases()
+            logger.info("✅ Database initialization complete")
+        except Exception as e:
+            logger.error(f"❌ Database initialization failed: {e}")
+            # Continue anyway - databases might already exist
+    
+    # Start database initialization in background
+    db_thread = threading.Thread(target=init_databases_background, daemon=True)
+    db_thread.start()
     
     # Start WebSocket server in background thread
     websocket_thread = threading.Thread(target=run_websocket_in_thread, daemon=True)
     websocket_thread.start()
     logger.info("✅ WebSocket server thread started")
     
-    # Start Flask server in main process (for Railway health checks)
-    from app import app
-    port = int(os.environ.get('PORT', 5000))
-    logger.info(f"🚀 Starting Flask HTTP server on port {port}")
+    # Start Flask server
     app.run(host='0.0.0.0', port=port, debug=False) 
