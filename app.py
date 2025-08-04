@@ -58,6 +58,17 @@ try:
 except Exception as e:
     logger.error(f"❌ Database initialization failed: {e}")
 
+# --- SSE Implementation ---
+clients = []  # List of queues for each connected client
+
+def broadcast_event(event_data):
+    logging.info(f"[SSE] Broadcasting event to {len(clients)} clients: {event_data}")
+    for client in clients[:]:
+        try:
+            client.put(event_data)
+        except Exception:
+            pass  # Ignore errors
+
 # Initialize services
 sms_service = SMSService()
 db = DatabaseService(broadcast_event=broadcast_event)
@@ -75,9 +86,6 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Initialize knowledge base service
 kb_service = KnowledgeBaseService(database_service=db)
-
-# --- SSE Implementation ---
-clients = []  # List of queues for each connected client
 
 # Heartbeat interval in seconds
 HEARTBEAT_INTERVAL = 15
@@ -146,14 +154,6 @@ def heartbeat():
 
 heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)
 heartbeat_thread.start()
-
-def broadcast_event(event_data):
-    logging.info(f"[SSE] Broadcasting event to {len(clients)} clients: {event_data}")
-    for client in clients[:]:
-        try:
-            client.put(event_data)
-        except Exception:
-            pass  # Ignore errors
 
 # Move DatabaseService import here to avoid circular import
 from database_service import DatabaseService
