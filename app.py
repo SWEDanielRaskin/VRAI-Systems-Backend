@@ -50,6 +50,14 @@ CORS(app, origins=allowed_origins, supports_credentials=True)
 # Register API blueprint
 app.register_blueprint(api_bp)
 
+# Initialize database on startup
+logger.info("🔧 Initializing database...")
+try:
+    db_service = DatabaseService()
+    logger.info("✅ Database initialized successfully")
+except Exception as e:
+    logger.error(f"❌ Database initialization failed: {e}")
+
 # --- SSE Implementation ---
 clients = []  # List of queues for each connected client
 
@@ -523,7 +531,7 @@ def start_ai_streaming(call_control_id):
         }
         
         # Get the WebSocket URL from environment or use the one from your config
-        websocket_stream_url = "wss://vraisystems.up.railway.app"  # Update this to your actual ngrok URL
+        websocket_stream_url = "wss://79275a8d4b7a.ngrok-free.app"  # Update this to your actual ngrok URL
         
         streaming_data = {
             "stream_url": websocket_stream_url,
