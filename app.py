@@ -1280,10 +1280,15 @@ def admin_sync_appointments():
 def list_services():
     """Return all services as JSON"""
     try:
+        logger.info("🔍 Attempting to fetch services from database...")
         services = db.get_services()
+        logger.info(f"✅ Successfully fetched {len(services)} services")
         return {"success": True, "services": services}
     except Exception as e:
-        logger.error(f"Error listing services: {str(e)}")
+        logger.error(f"❌ Error listing services: {str(e)}")
+        logger.error(f"❌ Exception type: {type(e)}")
+        import traceback
+        logger.error(f"❌ Full traceback: {traceback.format_exc()}")
         return {"success": False, "error": str(e)}, 500
 
 @app.route('/api/services', methods=['POST'])

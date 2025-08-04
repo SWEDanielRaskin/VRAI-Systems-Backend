@@ -1571,13 +1571,15 @@ class DatabaseService:
     def get_services(self):
         """Retrieve all services from the database"""
         try:
-            logger.info(f"🔧 Getting services from database: {self.db_file}")
+            logger.info(f"🔍 Connecting to database: {self.db_file}")
             conn = sqlite3.connect(self.db_file)
             cursor = conn.cursor()
             
             # Check if services table exists
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='services'")
             table_exists = cursor.fetchone()
+            logger.info(f"🔍 Services table exists: {table_exists is not None}")
+            
             if not table_exists:
                 logger.error("❌ Services table does not exist!")
                 conn.close()
@@ -1585,17 +1587,20 @@ class DatabaseService:
             
             cursor.execute('SELECT id, name, price, duration, requires_deposit, deposit_amount, description, source_doc_id FROM services')
             rows = cursor.fetchall()
+            logger.info(f"🔍 Found {len(rows)} services in database")
             conn.close()
             
             columns = ['id', 'name', 'price', 'duration', 'requires_deposit', 'deposit_amount', 'description', 'source_doc_id']
-            services = [dict(zip(columns, row)) for row in rows]
-            logger.info(f"✅ Retrieved {len(services)} services from database")
-            return services
+            result = [dict(zip(columns, row)) for row in rows]
+            logger.info(f"✅ Successfully converted {len(result)} services to dict format")
+            return result
             
         except Exception as e:
             logger.error(f"❌ Error in get_services: {str(e)}")
-            logger.error(f"❌ Error type: {type(e).__name__}")
-            return []
+            logger.error(f"❌ Exception type: {type(e)}")
+            import traceback
+            logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+            raise
 
     def get_service_by_id(self, service_id):
         """Retrieve a single service by its ID"""
