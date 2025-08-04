@@ -973,6 +973,16 @@ def delete_customer(phone_number):
 
 # ==================== APPOINTMENT NOTES ENDPOINTS ====================
 
+@api_bp.route('/appointments/<appointment_id>/notes', methods=['GET'])
+def get_appointment_notes(appointment_id):
+    """Get notes for a specific appointment"""
+    try:
+        notes = db.get_appointment_notes(appointment_id)
+        return jsonify({'notes': notes})
+    except Exception as e:
+        logger.error(f"Error getting appointment notes: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @api_bp.route('/appointments/<appointment_id>/notes', methods=['PUT'])
 def update_appointment_notes(appointment_id):
     """Update notes for a specific appointment"""
