@@ -55,8 +55,18 @@ logger.info("🔧 Initializing database...")
 try:
     db_service = DatabaseService()
     logger.info("✅ Database initialized successfully")
+    
+    # Test database connectivity
+    try:
+        services = db_service.get_services()
+        logger.info(f"✅ Database test successful - found {len(services)} services")
+    except Exception as db_test_error:
+        logger.error(f"❌ Database test failed: {db_test_error}")
+        
 except Exception as e:
     logger.error(f"❌ Database initialization failed: {e}")
+    import traceback
+    logger.error(f"❌ Full traceback: {traceback.format_exc()}")
 
 # --- SSE Implementation ---
 clients = []  # List of queues for each connected client
@@ -1280,10 +1290,15 @@ def admin_sync_appointments():
 def list_services():
     """Return all services as JSON"""
     try:
+        logger.info("🔍 Attempting to get services from database...")
         services = db.get_services()
+        logger.info(f"✅ Successfully retrieved {len(services)} services")
         return {"success": True, "services": services}
     except Exception as e:
-        logger.error(f"Error listing services: {str(e)}")
+        logger.error(f"❌ Error listing services: {str(e)}")
+        logger.error(f"❌ Error type: {type(e).__name__}")
+        import traceback
+        logger.error(f"❌ Full traceback: {traceback.format_exc()}")
         return {"success": False, "error": str(e)}, 500
 
 @app.route('/api/services', methods=['POST'])
