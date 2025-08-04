@@ -33,16 +33,6 @@ def run_websocket():
 if __name__ == '__main__':
     logger.info("🚀 Starting application with multiprocessing...")
     
-    # Initialize databases before starting servers
-    logger.info("🔧 Initializing databases...")
-    try:
-        from init_databases import main as init_databases
-        init_databases()
-        logger.info("✅ Database initialization complete")
-    except Exception as e:
-        logger.error(f"❌ Database initialization failed: {e}")
-        # Continue anyway - databases might already exist
-    
     # Start both servers in separate processes
     flask_process = multiprocessing.Process(target=run_flask, name="Flask-Server")
     websocket_process = multiprocessing.Process(target=run_websocket, name="WebSocket-Server")

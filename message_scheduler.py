@@ -30,9 +30,9 @@ def send_scheduled_message_standalone(message_id: str):
         sms_service = SMSService()
         calendar_service = GoogleCalendarService()
         
-        # Get message details from database
-        from config import SCHEDULED_MESSAGES_DB
-        db_file = SCHEDULED_MESSAGES_DB
+        # Get message details from database (now using main database)
+        from config import DATABASE_NAME
+        db_file = DATABASE_NAME
         message_data = _get_scheduled_message_from_db(message_id, db_file)
         
         if not message_data:
@@ -62,8 +62,8 @@ def send_scheduled_message_standalone(message_id: str):
             
     except Exception as e:
         logger.error(f"❌ Error executing scheduled message {message_id}: {str(e)}")
-        from config import SCHEDULED_MESSAGES_DB
-        _update_message_status_in_db(message_id, 'failed', str(e), SCHEDULED_MESSAGES_DB)
+        from config import DATABASE_NAME
+        _update_message_status_in_db(message_id, 'failed', str(e), DATABASE_NAME)
 
 # Helper functions for the standalone function
 def _get_scheduled_message_from_db(message_id: str, db_file: str) -> Optional[Dict]:
@@ -139,15 +139,12 @@ class MessageScheduler:
     def __init__(self, database_service=None):
         self.timezone = pytz.timezone(PYTZ_TIMEZONE)
         
-        # Database file for storing scheduled messages - use config for Railway support
-        from config import SCHEDULED_MESSAGES_DB
-        self.db_file = SCHEDULED_MESSAGES_DB
+        # Database file for storing scheduled messages - now using main database
+        from config import DATABASE_NAME
+        self.db_file = DATABASE_NAME
         
         # Initialize database service for message templates
         self.db = database_service or DatabaseService()
-        
-        # Initialize database
-        self._init_database()
         
         # Configure APScheduler with SQLite persistence
         jobstores = {
@@ -172,37 +169,6 @@ class MessageScheduler:
         # Start the scheduler
         self.scheduler.start()
         logger.info("✅ Message scheduler initialized with persistence")
-    
-    def _init_database(self):
-        """Initialize SQLite database for tracking scheduled messages"""
-        try:
-            conn = sqlite3.connect(self.db_file)
-            cursor = conn.cursor()
-            
-            # Create table for scheduled messages tracking
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS scheduled_messages (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    message_id TEXT UNIQUE NOT NULL,
-                    appointment_id TEXT NOT NULL,
-                    customer_name TEXT NOT NULL,
-                    customer_phone TEXT NOT NULL,
-                    message_type TEXT NOT NULL,
-                    scheduled_time TEXT NOT NULL,
-                    status TEXT DEFAULT 'pending',
-                    message_content TEXT,
-                    created_at TEXT NOT NULL,
-                    sent_at TEXT,
-                    error_message TEXT
-                )
-            ''')
-            
-            conn.commit()
-            conn.close()
-            logger.info("📝 Scheduled messages database initialized")
-            
-        except Exception as e:
-            logger.error(f"❌ Error initializing database: {str(e)}")
     
     def schedule_appointment_messages(self, appointment_data: Dict) -> Dict:
         """

@@ -115,6 +115,24 @@ class DatabaseService:
                 )
             ''')
             
+            # Scheduled messages table (moved from separate database)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS scheduled_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    message_id TEXT UNIQUE NOT NULL,
+                    appointment_id TEXT NOT NULL,
+                    customer_name TEXT NOT NULL,
+                    customer_phone TEXT NOT NULL,
+                    message_type TEXT NOT NULL,
+                    scheduled_time TEXT NOT NULL,
+                    status TEXT DEFAULT 'pending',
+                    message_content TEXT,
+                    created_at TEXT NOT NULL,
+                    sent_at TEXT,
+                    error_message TEXT
+                )
+            ''')
+            
             # Add the new columns if they don't exist (for existing databases)
             cursor.execute('''
                 SELECT name FROM pragma_table_info('messages') WHERE name='last_summary_message_count'
