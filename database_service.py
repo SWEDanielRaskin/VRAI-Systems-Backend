@@ -267,6 +267,11 @@ class DatabaseService:
             
             logger.info("✅ Database initialized successfully")
             
+            # Initialize default message templates
+            logger.info("📝 Initializing default message templates...")
+            self.initialize_default_templates()
+            logger.info("✅ Default message templates initialized")
+            
         except Exception as e:
             logger.error(f"❌ Error initializing database: {str(e)}")
             raise

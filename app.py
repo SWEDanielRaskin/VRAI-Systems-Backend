@@ -58,6 +58,20 @@ try:
 except Exception as e:
     logger.error(f"❌ Database initialization failed: {e}")
 
+# Add endpoint to manually initialize templates if needed
+@app.route('/api/initialize-templates', methods=['POST'])
+def initialize_templates():
+    """Manually initialize default message templates"""
+    try:
+        success = db_service.initialize_default_templates()
+        if success:
+            return jsonify({'success': True, 'message': 'Default templates initialized successfully'})
+        else:
+            return jsonify({'error': 'Failed to initialize templates'}), 500
+    except Exception as e:
+        logger.error(f"Error initializing templates: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 # --- SSE Implementation ---
 clients = []  # List of queues for each connected client
 
