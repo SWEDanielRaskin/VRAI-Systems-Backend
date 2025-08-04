@@ -55,18 +55,26 @@ logger.info("🔧 Initializing database...")
 try:
     db_service = DatabaseService()
     logger.info("✅ Database initialized successfully")
-    
-    # Test database connectivity
-    try:
-        services = db_service.get_services()
-        logger.info(f"✅ Database test successful - found {len(services)} services")
-    except Exception as db_test_error:
-        logger.error(f"❌ Database test failed: {db_test_error}")
-        
 except Exception as e:
     logger.error(f"❌ Database initialization failed: {e}")
-    import traceback
-    logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+
+# Initialize services
+sms_service = SMSService()
+db = DatabaseService(broadcast_event=broadcast_event)
+ai_receptionist = AIReceptionist(database_service=db)  # FIXED: Pass database service
+call_tracker = CallTrackingService()
+message_scheduler = MessageScheduler()
+ai_summarizer = AISummarizer(database_service=db)  # NEW: Initialize AI summarizer with database service
+
+# Initialize appointment service with database
+appointment_service = AppointmentService(database_service=db)
+
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'csv', 'xlsx'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Initialize knowledge base service
+kb_service = KnowledgeBaseService(database_service=db)
 
 # --- SSE Implementation ---
 clients = []  # List of queues for each connected client
@@ -149,24 +157,6 @@ def broadcast_event(event_data):
 
 # Move DatabaseService import here to avoid circular import
 from database_service import DatabaseService
-
-# Initialize services
-sms_service = SMSService()
-db = DatabaseService(broadcast_event=broadcast_event)
-ai_receptionist = AIReceptionist(database_service=db)  # FIXED: Pass database service
-call_tracker = CallTrackingService()
-message_scheduler = MessageScheduler()
-ai_summarizer = AISummarizer(database_service=db)  # NEW: Initialize AI summarizer with database service
-
-# Initialize appointment service with database
-appointment_service = AppointmentService(database_service=db)
-
-UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'csv', 'xlsx'}
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-# Initialize knowledge base service
-kb_service = KnowledgeBaseService(database_service=db)
 
 # Utility to check allowed file extensions
 def allowed_file(filename):
@@ -1290,15 +1280,10 @@ def admin_sync_appointments():
 def list_services():
     """Return all services as JSON"""
     try:
-        logger.info("🔍 Attempting to get services from database...")
         services = db.get_services()
-        logger.info(f"✅ Successfully retrieved {len(services)} services")
         return {"success": True, "services": services}
     except Exception as e:
-        logger.error(f"❌ Error listing services: {str(e)}")
-        logger.error(f"❌ Error type: {type(e).__name__}")
-        import traceback
-        logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+        logger.error(f"Error listing services: {str(e)}")
         return {"success": False, "error": str(e)}, 500
 
 @app.route('/api/services', methods=['POST'])
