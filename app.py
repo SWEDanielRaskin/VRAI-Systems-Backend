@@ -523,7 +523,7 @@ def start_ai_streaming(call_control_id):
         }
         
         # Get the WebSocket URL from environment or use the one from your config
-        websocket_stream_url = "wss://16d3c9815674.ngrok-free.app"  # Update this to your actual ngrok URL
+        websocket_stream_url = "wss://vraisystems.up.railway.app"  # Update this to your actual ngrok URL
         
         streaming_data = {
             "stream_url": websocket_stream_url,
