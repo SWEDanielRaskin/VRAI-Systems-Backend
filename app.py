@@ -61,32 +61,6 @@ except Exception as e:
 # --- SSE Implementation ---
 clients = []  # List of queues for each connected client
 
-def broadcast_event(event_data):
-    logging.info(f"[SSE] Broadcasting event to {len(clients)} clients: {event_data}")
-    for client in clients[:]:
-        try:
-            client.put(event_data)
-        except Exception:
-            pass  # Ignore errors
-
-# Initialize services
-sms_service = SMSService()
-db = DatabaseService(broadcast_event=broadcast_event)
-ai_receptionist = AIReceptionist(database_service=db)  # FIXED: Pass database service
-call_tracker = CallTrackingService()
-message_scheduler = MessageScheduler()
-ai_summarizer = AISummarizer(database_service=db)  # NEW: Initialize AI summarizer with database service
-
-# Initialize appointment service with database
-appointment_service = AppointmentService(database_service=db)
-
-UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'csv', 'xlsx'}
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-# Initialize knowledge base service
-kb_service = KnowledgeBaseService(database_service=db)
-
 # Heartbeat interval in seconds
 HEARTBEAT_INTERVAL = 15
 
@@ -155,8 +129,34 @@ def heartbeat():
 heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)
 heartbeat_thread.start()
 
+def broadcast_event(event_data):
+    logging.info(f"[SSE] Broadcasting event to {len(clients)} clients: {event_data}")
+    for client in clients[:]:
+        try:
+            client.put(event_data)
+        except Exception:
+            pass  # Ignore errors
+
 # Move DatabaseService import here to avoid circular import
 from database_service import DatabaseService
+
+# Initialize services
+sms_service = SMSService()
+db = DatabaseService(broadcast_event=broadcast_event)
+ai_receptionist = AIReceptionist(database_service=db)  # FIXED: Pass database service
+call_tracker = CallTrackingService()
+message_scheduler = MessageScheduler()
+ai_summarizer = AISummarizer(database_service=db)  # NEW: Initialize AI summarizer with database service
+
+# Initialize appointment service with database
+appointment_service = AppointmentService(database_service=db)
+
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'csv', 'xlsx'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Initialize knowledge base service
+kb_service = KnowledgeBaseService(database_service=db)
 
 # Utility to check allowed file extensions
 def allowed_file(filename):
@@ -1275,6 +1275,12 @@ scheduler.start()
 def admin_sync_appointments():
     appointment_service.sync_appointments_with_google_calendar()
     return jsonify({"status": "sync triggered"})
+
+@app.route('/test-services', methods=['GET'])
+def test_services():
+    """Simple test endpoint to verify backend is working"""
+    logger.info("🧪 TEST SERVICES ENDPOINT CALLED")
+    return {"success": True, "message": "Backend is working!"}
 
 @app.route('/api/services', methods=['GET'])
 def list_services():
