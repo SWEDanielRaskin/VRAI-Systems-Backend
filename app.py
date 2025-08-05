@@ -61,16 +61,10 @@ def serve_uploaded_file(filename):
         from config import UPLOADS_PATH
         
         full_path = os.path.join(UPLOADS_PATH, filename)
-        logger.info(f"Serving file request: {filename}")
-        logger.info(f"Full path: {full_path}")
-        logger.info(f"File exists: {os.path.exists(full_path)}")
-        logger.info(f"UPLOADS_PATH: {UPLOADS_PATH}")
         
         if os.path.exists(full_path):
-            logger.info(f"File found, serving: {full_path}")
             return send_from_directory(UPLOADS_PATH, filename)
         else:
-            logger.error(f"File not found: {full_path}")
             return jsonify({'error': 'File not found'}), 404
             
     except Exception as e:

@@ -1035,21 +1035,8 @@ def upload_customer_profile_picture(phone_number):
         filename = secure_filename(f"{phone_number}_{file.filename}")
         file_path = os.path.join(upload_dir, filename)
         
-        # Debug logging
-        logger.info(f"Uploading file: {file.filename}")
-        logger.info(f"Upload directory: {upload_dir}")
-        logger.info(f"Full file path: {file_path}")
-        logger.info(f"Directory exists: {os.path.exists(upload_dir)}")
-        
         # Save file
         file.save(file_path)
-        
-        # Verify file was saved
-        if os.path.exists(file_path):
-            logger.info(f"File successfully saved: {file_path}")
-            logger.info(f"File size: {os.path.getsize(file_path)} bytes")
-        else:
-            logger.error(f"Failed to save file: {file_path}")
         
         # Store relative path in database (for serving via /uploads/ route)
         relative_path = f"customer_photos/{filename}"
