@@ -326,6 +326,7 @@ class DatabaseService:
                 'messages_scheduled': 'BOOLEAN',
                 'scheduled_messages': 'TEXT',
                 'message_scheduling_error': 'TEXT',
+                'notes': 'TEXT',
                 'created_at': 'TEXT'
             }
             

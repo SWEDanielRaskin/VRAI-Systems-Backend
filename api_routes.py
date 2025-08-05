@@ -1005,6 +1005,23 @@ def update_appointment_notes(appointment_id):
 
 # ==================== CUSTOMER PROFILE PICTURE UPLOAD ====================
 
+@api_bp.route('/uploads/<path:filename>')
+def serve_uploaded_file(filename):
+    """Serve uploaded files (profile pictures, etc.)"""
+    try:
+        from flask import send_from_directory
+        import os
+        from config import UPLOADS_PATH
+        
+        if os.path.exists(os.path.join(UPLOADS_PATH, filename)):
+            return send_from_directory(UPLOADS_PATH, filename)
+        else:
+            return jsonify({'error': 'File not found'}), 404
+            
+    except Exception as e:
+        logger.error(f"Error serving uploaded file {filename}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @api_bp.route('/customers/<phone_number>/profile-picture', methods=['POST'])
 def upload_customer_profile_picture(phone_number):
     """Upload a profile picture for a customer"""
@@ -1024,8 +1041,9 @@ def upload_customer_profile_picture(phone_number):
         # Create customer photos directory if it doesn't exist
         import os
         from werkzeug.utils import secure_filename
+        from config import UPLOADS_PATH
         
-        upload_dir = 'uploads/customer_photos'
+        upload_dir = os.path.join(UPLOADS_PATH, 'customer_photos')
         os.makedirs(upload_dir, exist_ok=True)
         
         # Generate unique filename
@@ -1035,8 +1053,11 @@ def upload_customer_profile_picture(phone_number):
         # Save file
         file.save(file_path)
         
+        # Store relative path in database (for serving via /uploads/ route)
+        relative_path = f"customer_photos/{filename}"
+        
         # Update customer record
-        success = db.update_customer(phone_number, profile_picture_path=file_path)
+        success = db.update_customer(phone_number, profile_picture_path=relative_path)
         
         if success:
             return jsonify({
