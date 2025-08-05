@@ -136,7 +136,7 @@ async def handle_media_stream(websocket, path):
 async def main():
     """Start the WebSocket server"""
     port = int(os.environ.get('WEBSOCKET_PORT', 8080))
-    host = os.environ.get('WEBSOCKET_HOST', 'localhost')
+    host = os.environ.get('WEBSOCKET_HOST', '0.0.0.0')  # Changed from 'localhost' to '0.0.0.0'
     
     logger.info(f"Starting WebSocket server on {host}:{port}...")
     
