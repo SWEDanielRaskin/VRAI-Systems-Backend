@@ -565,8 +565,10 @@ def start_ai_streaming(call_control_id):
             "Content-Type": "application/json"
         }
         
-        # Get the WebSocket URL from environment or use the one from your config
-        websocket_stream_url = "wss://79275a8d4b7a.ngrok-free.app"  # Update this to your actual ngrok URL
+        # Get the WebSocket URL for Railway deployment
+        # Since both Flask and WebSocket run on the same service, use the Railway domain
+        railway_domain = os.environ.get('RAILWAY_STATIC_URL', 'https://vraisystems.up.railway.app')
+        websocket_stream_url = railway_domain.replace('https://', 'wss://').replace('http://', 'ws://')
         
         streaming_data = {
             "stream_url": websocket_stream_url,

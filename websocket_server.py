@@ -135,8 +135,9 @@ async def handle_media_stream(websocket, path):
 
 async def main():
     """Start the WebSocket server"""
-    port = int(os.environ.get('WEBSOCKET_PORT', 8080))
-    host = os.environ.get('WEBSOCKET_HOST', 'localhost')
+    # Use the same port as Flask for Railway deployment
+    port = int(os.environ.get('WEBSOCKET_PORT', 5000))
+    host = os.environ.get('WEBSOCKET_HOST', '0.0.0.0')
     
     logger.info(f"Starting WebSocket server on {host}:{port}...")
     
@@ -148,7 +149,6 @@ async def main():
     )
     
     logger.info(f"WebSocket server running on ws://{host}:{port}")
-    logger.info("Make sure to expose this with: ngrok http 8080")
     
     # Keep server running
     await server.wait_closed()
