@@ -140,18 +140,23 @@ async def main():
     
     logger.info(f"Starting WebSocket server on {host}:{port}...")
     
-    # Start WebSocket server
-    server = await websockets.serve(
-        handle_media_stream,
-        host,
-        port
-    )
-    
-    logger.info(f"WebSocket server running on ws://{host}:{port}")
-    logger.info("Make sure to expose this with: ngrok http 8080")
-    
-    # Keep server running
-    await server.wait_closed()
+    try:
+        # Start WebSocket server
+        server = await websockets.serve(
+            handle_media_stream,
+            host,
+            port
+        )
+        
+        logger.info(f"✅ WebSocket server running on ws://{host}:{port}")
+        logger.info(f"✅ External URL: wss://gondola.proxy.rlwy.net:39841")
+        logger.info("✅ Ready to accept Telnyx connections")
+        
+        # Keep server running
+        await server.wait_closed()
+    except Exception as e:
+        logger.error(f"❌ Failed to start WebSocket server: {e}")
+        raise
 
 if __name__ == "__main__":
     asyncio.run(main())

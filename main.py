@@ -26,9 +26,14 @@ def run_websocket():
     
     # Set the port for the websocket server
     os.environ['WEBSOCKET_PORT'] = str(port)
+    os.environ['WEBSOCKET_HOST'] = '0.0.0.0'  # Ensure it binds to all interfaces
     
     # Start the websocket server using asyncio
-    asyncio.run(start_websocket_server())
+    try:
+        asyncio.run(start_websocket_server())
+    except Exception as e:
+        logger.error(f"❌ WebSocket server failed to start: {e}")
+        raise
 
 if __name__ == '__main__':
     logger.info("🚀 Starting application with multiprocessing...")
