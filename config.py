@@ -12,11 +12,11 @@ TIMEZONE = "America/New_York"
 PYTZ_TIMEZONE = "America/New_York"
 
 # Database Configuration - Support Railway persistent volumes
-DATABASE_NAME = os.environ.get('DATABASE_PATH', "radiance_md.db")
+DATABASE_NAME = os.environ.get('DATABASE_PATH', "/data/radiance_md.db")
 
 # File paths for Railway persistence
-UPLOADS_PATH = os.environ.get('UPLOADS_PATH', "uploads")
-CREDENTIALS_PATH = os.environ.get('CREDENTIALS_PATH', "credentials")
+UPLOADS_PATH = os.environ.get('UPLOADS_PATH', "/data/uploads")
+CREDENTIALS_PATH = os.environ.get('CREDENTIALS_PATH', "/data/credentials")
 
 # Ensure database directories exist
 def ensure_database_directories():
@@ -32,6 +32,11 @@ def ensure_database_directories():
     
     if not os.path.exists(CREDENTIALS_PATH):
         os.makedirs(CREDENTIALS_PATH, exist_ok=True)
+    
+    # Ensure customer_photos subdirectory exists
+    customer_photos_dir = os.path.join(UPLOADS_PATH, 'customer_photos')
+    if not os.path.exists(customer_photos_dir):
+        os.makedirs(customer_photos_dir, exist_ok=True)
 
 # Initialize directories on import
 ensure_database_directories()

@@ -14,14 +14,6 @@
     {
       "name": "data",
       "path": "/data"
-    },
-    {
-      "name": "uploads",
-      "path": "/app/uploads"
-    },
-    {
-      "name": "credentials",
-      "path": "/app/credentials"
     }
   ]
 } 
