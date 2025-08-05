@@ -162,6 +162,16 @@ class DatabaseService:
                 ''')
                 logger.info("✅ Added is_business_hours column to calls table")
             
+            # Add notes column to appointments table if it doesn't exist
+            cursor.execute('''
+                SELECT name FROM pragma_table_info('appointments') WHERE name='notes'
+            ''')
+            if not cursor.fetchone():
+                cursor.execute('''
+                    ALTER TABLE appointments ADD COLUMN notes TEXT
+                ''')
+                logger.info("✅ Added notes column to appointments table")
+            
             # Notifications table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS notifications (
@@ -202,6 +212,7 @@ class DatabaseService:
                     messages_scheduled BOOLEAN,
                     scheduled_messages TEXT,
                     message_scheduling_error TEXT,
+                    notes TEXT,
                     created_at TEXT
                 )
             ''')
@@ -223,20 +234,7 @@ class DatabaseService:
                 )
             ''')
             
-            # Appointment notes table (for staff notes on specific appointments)
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS appointment_notes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    appointment_id INTEGER,
-                    calendar_event_id TEXT,  -- Alternative reference for calendar events
-                    customer_phone TEXT NOT NULL,
-                    notes TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    FOREIGN KEY (appointment_id) REFERENCES appointments (id),
-                    FOREIGN KEY (customer_phone) REFERENCES customers (phone_number)
-                )
-            ''')
+
             
             # Migrate appointments table if needed (add missing columns)
             self._migrate_appointments_table(cursor)
@@ -1785,49 +1783,22 @@ class DatabaseService:
             conn = sqlite3.connect(self.db_file)
             cursor = conn.cursor()
             
-            # First, get the appointment details to find the customer phone
+            # Update notes directly in the appointments table
             cursor.execute('''
-                SELECT customer_phone FROM appointments 
+                UPDATE appointments 
+                SET notes = ?
                 WHERE calendar_event_id = ? OR id = ?
-            ''', (appointment_id, appointment_id))
-            
-            appointment_row = cursor.fetchone()
-            if not appointment_row:
-                logger.warning(f"⚠️ No appointment found with ID {appointment_id}")
-                conn.close()
-                return False
-            
-            customer_phone = appointment_row[0]
-            
-            # Check if a note already exists for this appointment
-            cursor.execute('''
-                SELECT id FROM appointment_notes 
-                WHERE calendar_event_id = ?
-            ''', (appointment_id,))
-            
-            existing_note = cursor.fetchone()
-            now = datetime.now(self.timezone).isoformat()
-            
-            if existing_note:
-                # Update existing note
-                cursor.execute('''
-                    UPDATE appointment_notes 
-                    SET notes = ?, updated_at = ?
-                    WHERE calendar_event_id = ?
-                ''', (notes, now, appointment_id))
-            else:
-                # Create new note
-                cursor.execute('''
-                    INSERT INTO appointment_notes 
-                    (calendar_event_id, customer_phone, notes, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (appointment_id, customer_phone, notes, now, now))
+            ''', (notes, appointment_id, appointment_id))
             
             conn.commit()
             conn.close()
             
-            logger.info(f"✅ Appointment notes updated for {appointment_id}")
-            return True
+            if cursor.rowcount > 0:
+                logger.info(f"✅ Appointment notes updated for {appointment_id}")
+                return True
+            else:
+                logger.warning(f"⚠️ No appointment found with ID {appointment_id}")
+                return False
             
         except Exception as e:
             logger.error(f"❌ Error updating appointment notes: {str(e)}")
@@ -1840,9 +1811,9 @@ class DatabaseService:
             cursor = conn.cursor()
             
             cursor.execute('''
-                SELECT notes FROM appointment_notes 
-                WHERE calendar_event_id = ?
-            ''', (appointment_id,))
+                SELECT notes FROM appointments 
+                WHERE calendar_event_id = ? OR id = ?
+            ''', (appointment_id, appointment_id))
             
             row = cursor.fetchone()
             conn.close()
