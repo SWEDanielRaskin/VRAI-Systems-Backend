@@ -1013,9 +1013,17 @@ def serve_uploaded_file(filename):
         import os
         from config import UPLOADS_PATH
         
-        if os.path.exists(os.path.join(UPLOADS_PATH, filename)):
+        full_path = os.path.join(UPLOADS_PATH, filename)
+        logger.info(f"Serving file request: {filename}")
+        logger.info(f"Full path: {full_path}")
+        logger.info(f"File exists: {os.path.exists(full_path)}")
+        logger.info(f"UPLOADS_PATH: {UPLOADS_PATH}")
+        
+        if os.path.exists(full_path):
+            logger.info(f"File found, serving: {full_path}")
             return send_from_directory(UPLOADS_PATH, filename)
         else:
+            logger.error(f"File not found: {full_path}")
             return jsonify({'error': 'File not found'}), 404
             
     except Exception as e:
@@ -1050,8 +1058,21 @@ def upload_customer_profile_picture(phone_number):
         filename = secure_filename(f"{phone_number}_{file.filename}")
         file_path = os.path.join(upload_dir, filename)
         
+        # Debug logging
+        logger.info(f"Uploading file: {file.filename}")
+        logger.info(f"Upload directory: {upload_dir}")
+        logger.info(f"Full file path: {file_path}")
+        logger.info(f"Directory exists: {os.path.exists(upload_dir)}")
+        
         # Save file
         file.save(file_path)
+        
+        # Verify file was saved
+        if os.path.exists(file_path):
+            logger.info(f"File successfully saved: {file_path}")
+            logger.info(f"File size: {os.path.getsize(file_path)} bytes")
+        else:
+            logger.error(f"Failed to save file: {file_path}")
         
         # Store relative path in database (for serving via /uploads/ route)
         relative_path = f"customer_photos/{filename}"
