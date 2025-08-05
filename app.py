@@ -71,6 +71,15 @@ def serve_uploaded_file(filename):
         logger.error(f"Error serving uploaded file {filename}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/test-websocket-url')
+def test_websocket_url():
+    """Test endpoint to verify the WebSocket URL being sent to Telnyx"""
+    websocket_stream_url = "wss://gondola.proxy.rlwy.net:39841"
+    return jsonify({
+        'websocket_url': websocket_stream_url,
+        'message': 'This is the URL being sent to Telnyx for AI streaming'
+    })
+
 # Initialize database on startup
 logger.info("🔧 Initializing database...")
 try:
