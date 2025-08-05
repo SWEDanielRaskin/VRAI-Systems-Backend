@@ -31,6 +31,7 @@ import threading
 import queue
 from collections import deque
 from config import BUSINESS_FULL_NAME, PYTZ_TIMEZONE
+import websockets
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -71,6 +72,45 @@ def serve_uploaded_file(filename):
         logger.error(f"Error serving uploaded file {filename}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+# ==================== WEBSOCKET ROUTES ====================
+
+@app.route('/websocket')
+def websocket_endpoint():
+    """WebSocket endpoint for Telnyx streaming"""
+    try:
+        # Import the WebSocket handler from websocket_server
+        from websocket_server import handle_media_stream
+        
+        # This will be handled by the WebSocket server running in the same process
+        return "WebSocket endpoint - use ws:// protocol to connect", 400
+        
+    except Exception as e:
+        logger.error(f"Error in websocket endpoint: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# Start WebSocket server in background thread
+def start_websocket_server():
+    """Start WebSocket server in background thread"""
+    import threading
+    import asyncio
+    from websocket_server import main as websocket_main
+    
+    def run_websocket():
+        try:
+            # Set environment variables for WebSocket server
+            os.environ['WEBSOCKET_PORT'] = os.environ.get('PORT', '5000')
+            os.environ['WEBSOCKET_HOST'] = '0.0.0.0'
+            
+            # Run WebSocket server
+            asyncio.run(websocket_main())
+        except Exception as e:
+            logger.error(f"WebSocket server error: {e}")
+    
+    # Start WebSocket server in background thread
+    websocket_thread = threading.Thread(target=run_websocket, daemon=True)
+    websocket_thread.start()
+    logger.info("🔌 WebSocket server started in background thread")
+
 # Initialize database on startup
 logger.info("🔧 Initializing database...")
 try:
@@ -78,6 +118,9 @@ try:
     logger.info("✅ Database initialized successfully")
 except Exception as e:
     logger.error(f"❌ Database initialization failed: {e}")
+
+# Start WebSocket server
+start_websocket_server()
 
 # Add endpoint to manually initialize templates if needed
 @app.route('/api/initialize-templates', methods=['POST'])
@@ -566,9 +609,13 @@ def start_ai_streaming(call_control_id):
         }
         
         # Get the WebSocket URL for Railway deployment
-        # Since both Flask and WebSocket run on the same service, use the Railway domain
+        # Both Flask and WebSocket run on the same Railway service
         railway_domain = os.environ.get('RAILWAY_STATIC_URL', 'https://vraisystems.up.railway.app')
         websocket_stream_url = railway_domain.replace('https://', 'wss://').replace('http://', 'ws://')
+        
+        # Ensure the URL has the correct protocol
+        if not websocket_stream_url.startswith('wss://') and not websocket_stream_url.startswith('ws://'):
+            websocket_stream_url = 'wss://' + websocket_stream_url
         
         streaming_data = {
             "stream_url": websocket_stream_url,
