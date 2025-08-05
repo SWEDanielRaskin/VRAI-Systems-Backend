@@ -575,7 +575,7 @@ def start_ai_streaming(call_control_id):
         }
         
         # Get the WebSocket URL from environment or use the one from your config
-        websocket_stream_url = "wss://gondola.proxy.rlwy.net:39841"  # Railway TCP proxy for WebSocket server
+        websocket_stream_url = "wss://vraiwebsocket.site"  # Custom domain pointing to WebSocket server on port 8080
         
         streaming_data = {
             "stream_url": websocket_stream_url,
