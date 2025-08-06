@@ -43,9 +43,10 @@ allowed_origins = [
     "http://localhost:3000",  # Local development
     "https://localhost:3000",  # Local HTTPS
     "https://*.netlify.app",   # Netlify frontend
+    "https://admirable-marigold-31de3b.netlify.app",  # Your specific Netlify domain
     "https://*.railway.app"    # Railway frontend (if needed)
 ]
-CORS(app, origins=allowed_origins, supports_credentials=True)
+CORS(app, origins=allowed_origins, supports_credentials=True, methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 
 # Register API blueprint
 app.register_blueprint(api_bp)
