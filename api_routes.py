@@ -9,17 +9,123 @@ from knowledge_base_service import KnowledgeBaseService
 import os
 from google_sheets_archiver import GoogleSheetsArchiver
 from config import PYTZ_TIMEZONE
+import jwt
+import os
+from functools import wraps
 
 logger = logging.getLogger(__name__)
 
 # Create Blueprint for API routes
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
+# Authentication endpoints
+@api_bp.route('/auth/login', methods=['POST'])
+def login():
+    """Login endpoint"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        username = data.get('username')
+        password = data.get('password')
+        
+        if not username or not password:
+            return jsonify({'error': 'Username and password required'}), 400
+        
+        # Check credentials
+        if username == CLIENT_USERNAME and password == CLIENT_PASSWORD:
+            token = generate_token(username)
+            return jsonify({
+                'success': True,
+                'token': token,
+                'username': username,
+                'expires_in': JWT_EXPIRATION_HOURS * 3600  # seconds
+            })
+        else:
+            return jsonify({'error': 'Invalid credentials'}), 401
+            
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@api_bp.route('/auth/verify', methods=['GET'])
+def verify_auth():
+    """Verify authentication token"""
+    auth_header = request.headers.get('Authorization')
+    
+    if not auth_header:
+        return jsonify({'authenticated': False}), 401
+    
+    try:
+        token = auth_header.split(' ')[1]
+    except IndexError:
+        return jsonify({'authenticated': False}), 401
+    
+    payload = verify_token(token)
+    if payload:
+        return jsonify({
+            'authenticated': True,
+            'username': payload['username']
+        })
+    else:
+        return jsonify({'authenticated': False}), 401
+
 # Initialize database service
 db = DatabaseService()
 
 # NEW: Initialize knowledge base service
 kb_service = KnowledgeBaseService(database_service=db)
+
+# Authentication configuration
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
+JWT_ALGORITHM = 'HS256'
+JWT_EXPIRATION_HOURS = 24
+
+# Client credentials (in production, these should be in environment variables)
+CLIENT_USERNAME = os.getenv('CLIENT_USERNAME', 'carlathomas')
+CLIENT_PASSWORD = os.getenv('CLIENT_PASSWORD', 'hti89pqc')
+
+def generate_token(username):
+    """Generate JWT token for user"""
+    payload = {
+        'username': username,
+        'exp': datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS),
+        'iat': datetime.utcnow()
+    }
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+def verify_token(token):
+    """Verify JWT token"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+
+def require_auth(f):
+    """Decorator to require authentication"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        
+        if not auth_header:
+            return jsonify({'error': 'Authorization header required'}), 401
+        
+        try:
+            token = auth_header.split(' ')[1]  # Remove 'Bearer ' prefix
+        except IndexError:
+            return jsonify({'error': 'Invalid authorization header format'}), 401
+        
+        payload = verify_token(token)
+        if not payload:
+            return jsonify({'error': 'Invalid or expired token'}), 401
+        
+        return f(*args, **kwargs)
+    return decorated_function
 
 # FIXED: Helper function for consistent tracking windows
 def get_tracking_window():
@@ -38,6 +144,7 @@ def get_tracking_window():
 
 # Settings endpoints
 @api_bp.route('/settings/<setting_key>', methods=['GET'])
+@require_auth
 def get_setting(setting_key):
     """Get a specific setting"""
     try:
@@ -58,6 +165,7 @@ def get_setting(setting_key):
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/settings/<setting_key>', methods=['PUT'])
+@require_auth
 def update_setting(setting_key):
     """Update a specific setting"""
     try:
@@ -86,12 +194,14 @@ def update_setting(setting_key):
 
 # Staff endpoints
 @api_bp.route('/settings/staff', methods=['GET'])
+@require_auth
 def get_staff():
     include_inactive = request.args.get('include_inactive', 'true').lower() == 'true'
     staff = db.get_all_staff(include_inactive=include_inactive)
     return jsonify(staff)
 
 @api_bp.route('/settings/staff', methods=['PUT'])
+@require_auth
 def update_staff():
     """Update staff list"""
     try:
@@ -144,6 +254,7 @@ def update_staff():
 
 # Knowledge base endpoints - UPDATED with processing
 @api_bp.route('/knowledge_base', methods=['GET'])
+@require_auth
 def get_knowledge_base():
     """Get all knowledge base items"""
     try:
@@ -155,6 +266,7 @@ def get_knowledge_base():
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/knowledge_base/add_link', methods=['POST'])
+@require_auth
 def add_knowledge_base_link():
     """Add a group of links to knowledge base and process as one entry"""
     try:
@@ -204,6 +316,7 @@ def add_knowledge_base_link():
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/knowledge_base/upload', methods=['POST'])
+@require_auth
 def upload_knowledge_base_document():
     """Upload a document to knowledge base and process it"""
     try:
@@ -259,6 +372,7 @@ def upload_knowledge_base_document():
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/knowledge_base/<int:item_id>', methods=['DELETE'])
+@require_auth
 def remove_knowledge_base_item(item_id):
     """Remove a knowledge base item and its processed content"""
     try:
@@ -301,6 +415,7 @@ def remove_knowledge_base_item(item_id):
 
 # Dashboard data endpoints - FIXED WITH CONSISTENT 24-HOUR TRACKING
 @api_bp.route('/calls/recent', methods=['GET'])
+@require_auth
 def get_recent_calls():
     """Get recent calls for dashboard - ENHANCED: Returns detailed call list"""
     try:
@@ -385,6 +500,7 @@ def get_recent_calls():
         })
 
 @api_bp.route('/calls/<call_control_id>', methods=['GET'])
+@require_auth
 def get_call_details(call_control_id):
     """Get detailed information for a specific call including full transcript"""
     try:
@@ -468,6 +584,7 @@ def get_call_details(call_control_id):
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/messages/recent', methods=['GET'])
+@require_auth
 def get_recent_messages():
     """Get recent messages for dashboard - ENHANCED: Returns detailed conversation list"""
     try:
@@ -541,6 +658,7 @@ def get_recent_messages():
         })
 
 @api_bp.route('/messages/<conversation_id>', methods=['GET'])
+@require_auth
 def get_conversation_details(conversation_id):
     """Get detailed information for a specific conversation including full message history"""
     try:
@@ -603,6 +721,7 @@ def get_conversation_details(conversation_id):
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/appointments/new_today', methods=['GET'])
+@require_auth
 def get_new_appointments_today():
     """Get count of appointments created today - FIXED: 24-hour tracking window"""
     try:
@@ -643,6 +762,7 @@ def get_new_appointments_today():
 
 # Analytics endpoints
 @api_bp.route('/analytics/weekly_summary', methods=['GET'])
+@require_auth
 def get_weekly_summary():
     """Get weekly analytics summary"""
     try:
@@ -709,6 +829,7 @@ def get_weekly_summary():
 
 # Notifications endpoints
 @api_bp.route('/notifications', methods=['GET'])
+@require_auth
 def get_notifications():
     """Get all notifications"""
     try:
@@ -723,6 +844,7 @@ def get_notifications():
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/notifications/<int:notification_id>/resolve', methods=['POST'])
+@require_auth
 def resolve_notification(notification_id):
     """Mark a notification as resolved"""
     try:
@@ -738,6 +860,7 @@ def resolve_notification(notification_id):
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/notifications/<int:notification_id>', methods=['DELETE'])
+@require_auth
 def delete_notification(notification_id):
     """Delete a notification"""
     try:
@@ -858,6 +981,7 @@ def extract_links():
 # ==================== CUSTOMER MANAGEMENT ENDPOINTS ====================
 
 @api_bp.route('/customers', methods=['GET'])
+@require_auth
 def get_customers():
     """Get list of customers with optional search, sorting, and pagination"""
     try:
@@ -887,6 +1011,7 @@ def get_customers():
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/customers/<phone_number>', methods=['GET'])
+@require_auth
 def get_customer_detail(phone_number):
     """Get detailed customer information including appointment history"""
     try:
@@ -902,6 +1027,7 @@ def get_customer_detail(phone_number):
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/customers', methods=['POST'])
+@require_auth
 def create_customer():
     """Create a new customer manually"""
     try:
@@ -931,6 +1057,7 @@ def create_customer():
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/customers/<phone_number>', methods=['PUT'])
+@require_auth
 def update_customer(phone_number):
     """Update customer information"""
     try:
@@ -955,6 +1082,7 @@ def update_customer(phone_number):
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/customers/<phone_number>', methods=['DELETE'])
+@require_auth
 def delete_customer(phone_number):
     """Delete a customer (use with caution)"""
     try:
@@ -974,6 +1102,7 @@ def delete_customer(phone_number):
 # ==================== APPOINTMENT NOTES ENDPOINTS ====================
 
 @api_bp.route('/appointments/<appointment_id>/notes', methods=['GET'])
+@require_auth
 def get_appointment_notes(appointment_id):
     """Get notes for a specific appointment"""
     try:
@@ -984,6 +1113,7 @@ def get_appointment_notes(appointment_id):
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/appointments/<appointment_id>/notes', methods=['PUT'])
+@require_auth
 def update_appointment_notes(appointment_id):
     """Update notes for a specific appointment"""
     try:
@@ -1008,6 +1138,7 @@ def update_appointment_notes(appointment_id):
 
 
 @api_bp.route('/customers/<phone_number>/profile-picture', methods=['POST'])
+@require_auth
 def upload_customer_profile_picture(phone_number):
     """Upload a profile picture for a customer"""
     try:
@@ -1062,6 +1193,7 @@ def upload_customer_profile_picture(phone_number):
 # ==================== MESSAGE TEMPLATES ENDPOINTS ====================
 
 @api_bp.route('/message-templates', methods=['GET'])
+@require_auth
 def get_message_templates():
     """Get all message templates"""
     try:
@@ -1072,6 +1204,7 @@ def get_message_templates():
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/message-templates/<template_type>', methods=['GET'])
+@require_auth
 def get_message_template(template_type):
     """Get a specific message template"""
     try:
@@ -1085,6 +1218,7 @@ def get_message_template(template_type):
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/message-templates/<template_type>', methods=['PUT'])
+@require_auth
 def update_message_template(template_type):
     """Update a message template"""
     try:
@@ -1113,6 +1247,7 @@ def update_message_template(template_type):
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/message-templates/initialize', methods=['POST'])
+@require_auth
 def initialize_message_templates():
     """Initialize default message templates"""
     try:
@@ -1126,6 +1261,7 @@ def initialize_message_templates():
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/test-send-sms', methods=['POST'])
+@require_auth
 def test_send_sms():
     """Send a test SMS message"""
     try:
@@ -1158,6 +1294,7 @@ def test_send_sms():
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/message-templates/restore-defaults', methods=['POST'])
+@require_auth
 def restore_default_templates():
     """Restore message templates to their original default values"""
     try:
