@@ -72,8 +72,8 @@ def test_protected_endpoint(token):
     }
     
     try:
-        # Test the settings endpoint
-        response = requests.get(f"{BASE_URL}/api/settings/business_name", headers=headers)
+        # Test the staff endpoint (this should definitely exist)
+        response = requests.get(f"{BASE_URL}/api/settings/staff", headers=headers)
         print(f"Status Code: {response.status_code}")
         
         if response.status_code == 200:
