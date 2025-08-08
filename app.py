@@ -44,6 +44,9 @@ allowed_origins = [
     "https://localhost:3000",  # Local HTTPS
     "https://*.netlify.app",   # Netlify frontend
     "https://admirable-marigold-31de3b.netlify.app",  # Your specific Netlify domain
+    "https://carla.vraisystems.org",  # Client subdomain
+    "https://vraisystems.org",  # Main landing page
+    "https://vrai-systems-authentication.up.railway.app",  # Central auth backend
     "https://*.railway.app"    # Railway frontend (if needed)
 ]
 CORS(app, origins=allowed_origins, supports_credentials=True, methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
