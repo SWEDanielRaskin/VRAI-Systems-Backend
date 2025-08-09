@@ -1324,35 +1324,23 @@ def admin_sync_appointments():
     appointment_service.sync_appointments_with_google_calendar()
     return jsonify({"status": "sync triggered"})
 
-@app.route('/api/services', methods=['GET'])
-def list_services():
-    """Return all services as JSON"""
-    try:
-        services = db.get_services()
-        return {"success": True, "services": services}
-    except Exception as e:
-        logger.error(f"Error listing services: {str(e)}")
-        return {"success": False, "error": str(e)}, 500
+# Services endpoints moved to api_routes.py for authentication
 
-@app.route('/api/services', methods=['POST'])
-def add_service():
-    """Add a new service"""
+@app.route('/api/broadcast/call_finished', methods=['POST'])
+def api_broadcast_call_finished():
+    """Endpoint to broadcast a call_finished SSE event (for use by websocket_server or other services)"""
     try:
-        data = request.get_json()
-        name = data['name']
-        price = data['price']
-        duration = data['duration']
-        requires_deposit = data.get('requires_deposit', True)
-        deposit_amount = data.get('deposit_amount', 50)
-        description = data.get('description')
-        source_doc_id = data.get('source_doc_id')
-        db.add_service(name, price, duration, requires_deposit, deposit_amount, description, source_doc_id)
-        kb_service.sync_services_to_knowledge_base()
-        broadcast_event('{"type": "appointment_created"}')
-        return {"success": True}
+        data = request.get_json(force=True)
+        call_id = data.get('callId')
+        if not call_id:
+            return jsonify({'success': False, 'error': 'Missing callId'}), 400
+        event_data = json.dumps({'type': 'call_finished', 'callId': call_id})
+        broadcast_event(event_data)
+        logger.info(f"[SSE] API endpoint broadcasted call_finished for {call_id}")
+        return jsonify({'success': True})
     except Exception as e:
-        logger.error(f"Error adding service: {str(e)}")
-        return {"success": False, "error": str(e)}, 400
+        logger.error(f"[SSE] Error in /api/broadcast/call_finished: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/services/<int:service_id>', methods=['GET'])
 def get_service(service_id):
