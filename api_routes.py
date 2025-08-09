@@ -12,8 +12,6 @@ from config import PYTZ_TIMEZONE
 import jwt
 import os
 from functools import wraps
-import pandas as pd
-from werkzeug.utils import secure_filename
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +78,6 @@ db = DatabaseService()
 # NEW: Initialize knowledge base service
 kb_service = KnowledgeBaseService(database_service=db)
 
-# Configuration
-UPLOAD_FOLDER = 'uploads'
-
 # Authentication configuration
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
 JWT_ALGORITHM = 'HS256'
@@ -131,18 +126,6 @@ def require_auth(f):
         
         return f(*args, **kwargs)
     return decorated_function
-
-# Helper functions for services
-def allowed_file(filename):
-    """Check if file extension is allowed"""
-    ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'xls'}
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def broadcast_event(event_data):
-    """Broadcast event to connected clients"""
-    # This is a simplified version - in app.py this connects to SSE
-    # For now, we'll just log it since the services endpoints don't critically need SSE
-    logger.info(f"Event: {event_data}")
 
 # FIXED: Helper function for consistent tracking windows
 def get_tracking_window():
@@ -1323,174 +1306,3 @@ def restore_default_templates():
     except Exception as e:
         logger.error(f"Error restoring default templates: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
-# Services endpoints
-@api_bp.route('/services', methods=['GET'])
-@require_auth
-def list_services():
-    """Return all services as JSON"""
-    try:
-        services = db.get_services()
-        return {"success": True, "services": services}
-    except Exception as e:
-        logger.error(f"Error listing services: {str(e)}")
-        return {"success": False, "error": str(e)}, 500
-
-@api_bp.route('/services', methods=['POST'])
-@require_auth
-def add_service():
-    """Add a new service"""
-    try:
-        data = request.get_json()
-        name = data['name']
-        price = data['price']
-        duration = data['duration']
-        requires_deposit = data.get('requires_deposit', True)
-        deposit_amount = data.get('deposit_amount', 50)
-        description = data.get('description')
-        source_doc_id = data.get('source_doc_id')
-        db.add_service(name, price, duration, requires_deposit, deposit_amount, description, source_doc_id)
-        kb_service.sync_services_to_knowledge_base()
-        broadcast_event('{"type": "appointment_created"}')
-        return {"success": True}
-    except Exception as e:
-        logger.error(f"Error adding service: {str(e)}")
-        return {"success": False, "error": str(e)}, 400
-
-@api_bp.route('/services/<int:service_id>', methods=['GET'])
-@require_auth
-def get_service(service_id):
-    """Get a single service by ID"""
-    try:
-        service = db.get_service_by_id(service_id)
-        if service:
-            return {"success": True, "service": service}
-        else:
-            return {"success": False, "error": "Service not found"}, 404
-    except Exception as e:
-        logger.error(f"Error getting service: {str(e)}")
-        return {"success": False, "error": str(e)}, 500
-
-@api_bp.route('/services/<int:service_id>', methods=['PUT'])
-@require_auth
-def update_service(service_id):
-    """Update a service by ID"""
-    try:
-        data = request.get_json()
-        db.update_service(
-            service_id,
-            name=data.get('name'),
-            price=data.get('price'),
-            duration=data.get('duration'),
-            requires_deposit=data.get('requires_deposit'),
-            deposit_amount=data.get('deposit_amount'),
-            description=data.get('description')
-        )
-        kb_service.sync_services_to_knowledge_base()
-        return {"success": True}
-    except Exception as e:
-        logger.error(f"Error updating service: {str(e)}")
-        return {"success": False, "error": str(e)}, 400
-
-@api_bp.route('/services/<int:service_id>', methods=['DELETE'])
-@require_auth
-def delete_service(service_id):
-    """Delete a service by ID"""
-    try:
-        db.delete_service(service_id)
-        kb_service.sync_services_to_knowledge_base()
-        return {"success": True}
-    except Exception as e:
-        logger.error(f"Error deleting service: {str(e)}")
-        return {"success": False, "error": str(e)}, 400
-
-@api_bp.route('/services/upload-document', methods=['POST'])
-@require_auth
-def upload_services_document():
-    """Upload a services document (CSV or Excel)"""
-    if 'file' not in request.files:
-        return {"success": False, "error": "No file part in request"}, 400
-    file = request.files['file']
-    if file.filename == '':
-        return {"success": False, "error": "No selected file"}, 400
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        save_path = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(save_path)
-        return {"success": True, "file_path": save_path}
-    else:
-        return {"success": False, "error": "Invalid file type. Only CSV and Excel files are allowed."}, 400
-
-@api_bp.route('/services/parse-document', methods=['POST'])
-@require_auth
-def parse_services_document():
-    """Parse an uploaded services document and return a preview of extracted services."""
-    data = request.get_json()
-    file_path = data.get('file_path')
-    if not file_path or not os.path.exists(file_path):
-        return {"success": False, "error": "File not found."}, 400
-    try:
-        ext = file_path.rsplit('.', 1)[1].lower()
-        if ext == 'csv':
-            df = pd.read_csv(file_path)
-        elif ext == 'xlsx':
-            df = pd.read_excel(file_path)
-        else:
-            return {"success": False, "error": "Unsupported file type."}, 400
-
-        # Normalize column names
-        df.columns = [c.strip().lower().replace(' ', '_') for c in df.columns]
-        # Required columns: service name, price, duration
-        required = ['service_name', 'price', 'duration']
-        for col in required:
-            if col not in df.columns:
-                return {"success": False, "error": f"Missing required column: {col}"}, 400
-        # Optional columns
-        desc_col = 'description' if 'description' in df.columns else None
-        dep_req_col = 'deposit_required' if 'deposit_required' in df.columns else None
-        dep_amt_col = 'deposit_amount' if 'deposit_amount' in df.columns else None
-        # Build preview list
-        preview = []
-        for _, row in df.iterrows():
-            service = {
-                'name': str(row['service_name']).strip(),
-                'price': float(row['price']),
-                'duration': int(row['duration']),
-                'requires_deposit': True if (dep_req_col and str(row[dep_req_col]).strip().lower() in ['yes', 'true', '1']) else True,  # Default True
-                'deposit_amount': float(row[dep_amt_col]) if dep_amt_col and not pd.isnull(row[dep_amt_col]) else 50.0,
-                'description': str(row[desc_col]).strip() if desc_col and not pd.isnull(row[desc_col]) else None
-            }
-            preview.append(service)
-        return {"success": True, "services": preview}
-    except Exception as e:
-        logger.error(f"Error parsing services document: {str(e)}")
-        return {"success": False, "error": str(e)}, 500
-
-@api_bp.route('/services/save', methods=['POST'])
-@require_auth
-def save_services():
-    """Save a list of services (from parsed/edited preview) to the database."""
-    data = request.get_json()
-    services = data.get('services')
-    source_doc_id = data.get('source_doc_id')
-    if not services or not isinstance(services, list):
-        return {"success": False, "error": "No services provided."}, 400
-    added = 0
-    for service in services:
-        try:
-            db.add_service(
-                name=service['name'],
-                price=service['price'],
-                duration=service['duration'],
-                requires_deposit=service.get('requires_deposit', True),
-                deposit_amount=service.get('deposit_amount', 50),
-                description=service.get('description'),
-                source_doc_id=source_doc_id
-            )
-            added += 1
-        except Exception as e:
-            logger.error(f"Error adding service: {str(e)}")
-            continue
-    kb_service.sync_services_to_knowledge_base()
-    broadcast_event('{"type": "appointment_created"}')
-    return {"success": True, "added": added}
