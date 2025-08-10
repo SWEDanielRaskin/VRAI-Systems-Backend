@@ -17,6 +17,7 @@ from google_calendar_service import GoogleCalendarService
 from sms_service import SMSService
 from payment_service import PaymentService  # New import
 from config import BUSINESS_FULL_NAME, PYTZ_TIMEZONE
+from fuzzywuzzy import fuzz
 
 # Load environment variables
 load_dotenv()
@@ -963,6 +964,57 @@ class OpenAIRealtimeService:
         logger.debug(f"No goodbye detected in: '{text}'")
         return False
     
+    def detect_phone_number_trigger(self, ai_response: str, threshold: int = 65) -> bool:
+        """
+        Detect if AI response matches the phone number collection trigger phrase
+        using fuzzy string matching with 65% threshold
+        """
+        trigger_phrase = "Is the phone number you're calling from the best number to reach you? If not, please provide your preferred number."
+        
+        if not ai_response or not ai_response.strip():
+            return False
+        
+        # Use token_sort_ratio for better handling of word order differences
+        similarity = fuzz.token_sort_ratio(ai_response.lower().strip(), trigger_phrase.lower())
+        
+        logger.info(f"🔍 Phone trigger similarity: {similarity}% for response: '{ai_response[:100]}...'")
+        
+        is_match = similarity >= threshold
+        if is_match:
+            logger.info(f"🎯 PHONE NUMBER TRIGGER DETECTED! Similarity: {similarity}% >= {threshold}%")
+        
+        return is_match
+    
+    async def inject_function_reminder(self):
+        """
+        Inject a system message to remind the AI to use appointment booking functions
+        This doesn't trigger a response, just adds context for the next user interaction
+        """
+        if not self.openai_ws or not self.session_active:
+            logger.warning("Cannot inject reminder - OpenAI connection not active")
+            return
+        
+        try:
+            reminder_message = {
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "message",
+                    "role": "system",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Remember to use the appointment booking functions to collect the customer's information step by step. Always call the appropriate function after collecting each piece of information."
+                        }
+                    ]
+                }
+            }
+            
+            await self.openai_ws.send(json.dumps(reminder_message))
+            logger.info("📢 Injected function reminder message to guide AI behavior")
+            
+        except Exception as e:
+            logger.error(f"❌ Error injecting function reminder: {str(e)}")
+    
     async def start_silence_timer(self):
         """Start 90-second silence detection timer"""
         if self.conversation_ended or self.silence_check_sent:
@@ -1491,6 +1543,11 @@ class OpenAIRealtimeService:
                         })
                         logger.info(f"AI said: {response_text}")
                         
+                        # NEW: Check for phone number trigger phrase and inject reminder if detected
+                        if self.detect_phone_number_trigger(response_text):
+                            logger.info("🚨 Phone number trigger detected in text response - injecting function reminder")
+                            await self.inject_function_reminder()
+                        
                         # NEW: Check for false booking confirmation in voice responses
                         if self.booking_verification_service and self.caller_phone_number:
                             self.booking_verification_service.log_ai_response(self.caller_phone_number, response_text)
@@ -1544,6 +1601,11 @@ class OpenAIRealtimeService:
                             "time": datetime.now().strftime('%H:%M:%S')
                         })
                         logger.info(f"AI (audio transcript) said: {transcript}")
+                        
+                        # NEW: Check for phone number trigger phrase and inject reminder if detected
+                        if self.detect_phone_number_trigger(transcript):
+                            logger.info("🚨 Phone number trigger detected - injecting function reminder")
+                            await self.inject_function_reminder()
                         
                         # Check AI's audio transcript for goodbye and start hangup timer
                         if self.detect_goodbye(transcript):
