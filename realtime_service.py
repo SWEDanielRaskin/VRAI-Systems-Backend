@@ -1344,7 +1344,7 @@ class OpenAIRealtimeService:
                 },
                 "tools": self.appointment_functions,
                 "tool_choice": "auto",  # <-- ADD THIS LINE HERE
-                "temperature": 0.7,  # Fixed: minimum 0.6 for Realtime API
+                "temperature": 0.6,  # Fixed: minimum 0.6 for Realtime API
                 "max_response_output_tokens": 1000
             }
         }
