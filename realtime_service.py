@@ -1002,7 +1002,7 @@ class OpenAIRealtimeService:
                     "role": "system",
                     "content": [
                         {
-                            "type": "text",
+                            "type": "input_text",
                             "text": "Remember to use the appointment booking functions to collect the customer's information step by step. Always call the appropriate function after collecting each piece of information."
                         }
                     ]
