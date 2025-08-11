@@ -310,29 +310,16 @@ class AIReceptionist:
                     "required": ["query_type", "specific_question"]
                 }
             },
-            {
-                "name": "collect_cancellation_phone",
-                "description": """Collect phone number to search for appointments to cancel. Use when customer wants to cancel an appointment and needs to provide their phone number. After collecting the phone, IMMEDIATELY call search_appointments_by_phone function - do NOT say phrases like 'let me search' or 'please hold on'.""",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "phone": {
-                            "type": "string",
-                            "description": "Phone number to search for appointments (customer can provide specific number or indicate they want to use their texting number)"
-                        }
-                    },
-                    "required": ["phone"]
-                }
-            },
+
             {
                 "name": "search_appointments_by_phone",
-                "description": """Search for appointments by phone number for cancellation. Use IMMEDIATELY when customer provides their phone number for cancellation - do NOT use phrases like 'let me search', 'hold on', or 'one moment'. Just call this function directly.""",
+                "description": """Search for appointments by phone number for cancellation. Use IMMEDIATELY when customer provides their phone number for cancellation - do NOT use phrases like 'let me search', 'hold on', or 'one moment'. This function handles phone normalization (yes/texting from/etc.) and shows available appointments for cancellation.""",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "phone": {
                             "type": "string",
-                            "description": "Phone number to search for appointments"
+                            "description": "Phone number to search for appointments (customer can provide specific number or indicate they want to use their texting number with 'yes', 'texting from', etc.)"
                         }
                     },
                     "required": ["phone"]
@@ -513,8 +500,7 @@ class AIReceptionist:
                 return self.check_availability_function(**arguments)
             elif function_name == "get_business_information":
                 return self.get_business_information_function(**arguments)
-            elif function_name == "collect_cancellation_phone":
-                return self.collect_cancellation_phone_function(user_id=user_id, **arguments)
+
             elif function_name == "search_appointments_by_phone":
                 return self.search_appointments_by_phone_function(user_id=user_id, **arguments)
             elif function_name == "select_appointment_to_cancel":
@@ -787,6 +773,7 @@ class AIReceptionist:
             CRITICAL RULES:
             - When customers ask about business information (hours, services, location, staff, pricing, policies), IMMEDIATELY use the get_business_information function.
             - For appointment booking, follow the ENHANCED SMS FLOW instructions below
+            - For appointment cancellation, follow the SIMPLIFIED CANCELLATION FLOW instructions below
             - Keep ALL responses under 160 characters to avoid multi-part SMS messages
             - Today's date is {datetime.now().strftime('%Y-%m-%d')}
             - When customers say "tomorrow", use {(datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')}
@@ -810,6 +797,17 @@ class AIReceptionist:
             2B. RETURNING CUSTOMER without up-next: System will ask for all booking details together: "Can you please provide the service you want to book, your preferred date and time, and if you have a specific preference for a specialist?" THEN call collect_sms_booking_details function
             2C. NEW CUSTOMER: Ask for all details together: "Please provide your name, the service you would like to book, your preferred date and time, and if you have a preference for a specific specialist." THEN call collect_sms_booking_details function
             
+            SIMPLIFIED CANCELLATION FLOW:
+            1. When customer wants to cancel: Ask "What phone number did you book the appointment with?"
+            2. When customer provides phone number: IMMEDIATELY call search_appointments_by_phone function with their phone number
+            3. If multiple appointments found: Customer selects one using select_appointment_to_cancel function
+            4. When customer confirms cancellation: Call confirm_cancellation function to execute the cancellation
+            
+            CRITICAL CANCELLATION RULES:
+            - ALWAYS call search_appointments_by_phone function directly when customer provides phone number
+            - DO NOT say "let me search" or "one moment" - search immediately and show results
+            - The search function handles phone normalization automatically (yes/texting from/etc.)
+
             CRITICAL SMS BOOKING RULES:
             - ALWAYS start with collect_phone_for_booking function when customer wants to book
             - The phone function will automatically determine customer type and provide appropriate next steps
@@ -988,40 +986,9 @@ class AIReceptionist:
     # CANCELLATION FUNCTION HANDLERS
     # ===============================
     
-    def collect_cancellation_phone_function(self, phone: str, user_id: str = None):
-        """Handle phone collection for SMS cancellation"""
-        logger.info(f"📞 SMS Cancellation - Collected phone: {phone}")
-        
-        if not user_id:
-            return {
-                "success": False,
-                "message": "Unable to process cancellation request. Please try again.",
-                "error": "No user ID available"
-            }
-        
-        # Get state machine for this user
-        state_machine = self.get_cancellation_state_machine(user_id)
-        
-        # Handle sender ID logic - if user indicates they want to use their texting number
-        if (phone.lower() in ["same", "yes", "y", "yeah", "sure", "this number", "texting from"] or
-            "texting from" in phone.lower() or
-            "this number" in phone.lower()):
-            logger.info(f"📞 SMS Cancellation - Using sender's number {user_id} instead of '{phone}'")
-            phone = user_id
-        
-        # Format phone number for consistent database searching
-        formatted_phone = self.appointment_service._format_phone_for_search(phone)
-        
-        state_machine.add_collected_data("phone", formatted_phone)
-        
-        return {
-            "success": True,
-            "message": "Let me search for your appointments.",
-            "collected_phone": formatted_phone
-        }
-    
+
     def search_appointments_by_phone_function(self, phone: str, user_id: str = None):
-        """Handle appointment search for SMS cancellation"""
+        """Handle appointment search for SMS cancellation with phone normalization"""
         logger.info(f"🔍 SMS Cancellation - Searching appointments for phone: {phone}")
         
         if not user_id:
@@ -1043,8 +1010,22 @@ class AIReceptionist:
         # Get state machine for this user
         state_machine = self.get_cancellation_state_machine(user_id)
         
-        # Use the appointment service to search
-        search_result = self.appointment_service.search_appointments_by_phone(phone)
+        # Handle sender ID logic - if user indicates they want to use their texting number
+        if (phone.lower() in ["same", "yes", "y", "yeah", "sure", "this number", "texting from"] or
+            "texting from" in phone.lower() or
+            "this number" in phone.lower()):
+            logger.info(f"📞 SMS Cancellation - Using sender's number {user_id} instead of '{phone}'")
+            phone = user_id
+        
+        # Format phone number for consistent database searching
+        formatted_phone = self.appointment_service._format_phone_for_search(phone)
+        logger.info(f"📞 SMS Cancellation - Formatted phone for search: {formatted_phone}")
+        
+        # Update state machine with collected phone data
+        state_machine.add_collected_data("phone", formatted_phone)
+        
+        # Use the appointment service to search with formatted phone
+        search_result = self.appointment_service.search_appointments_by_phone(formatted_phone)
         logger.info(f"🔍 SMS Cancellation - Search result: {search_result}")
         
         if not search_result['success']:
