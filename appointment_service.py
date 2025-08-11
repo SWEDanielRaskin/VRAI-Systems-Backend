@@ -54,7 +54,7 @@ class AppointmentService:
     def __init__(self, database_service=None):
         """Initialize appointment service with database connection"""
         self.db = database_service
-        self.calendar_service = GoogleCalendarService()
+        self.calendar_service = GoogleCalendarService(database_service=database_service)
         self.sms_service = SMSService()
         self.payment_service = PaymentService()
         self.message_scheduler = MessageScheduler()

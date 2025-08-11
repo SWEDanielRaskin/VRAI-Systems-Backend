@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, redirect, url_for
 import sqlite3
 import json
 import logging
@@ -12,6 +12,10 @@ from config import PYTZ_TIMEZONE
 import jwt
 import os
 from functools import wraps
+import time
+from google_auth_oauthlib.flow import Flow
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +90,17 @@ JWT_EXPIRATION_HOURS = 24
 # Client credentials (in production, these should be in environment variables)
 CLIENT_USERNAME = os.getenv('CLIENT_USERNAME', 'carlathomas')
 CLIENT_PASSWORD = os.getenv('CLIENT_PASSWORD', 'hti89pqc')
+
+# Google OAuth configuration
+GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID')
+GOOGLE_OAUTH_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET')
+GOOGLE_OAUTH_REDIRECT_URI = os.getenv('GOOGLE_OAUTH_REDIRECT_URI', 'https://vraisystems.up.railway.app/api/oauth/google/callback')
+
+# OAuth scopes for Google Calendar
+GOOGLE_OAUTH_SCOPES = [
+    'https://www.googleapis.com/auth/calendar',
+    'https://www.googleapis.com/auth/calendar.readonly'
+]
 
 def generate_token(username):
     """Generate JWT token for user"""
@@ -1305,4 +1320,285 @@ def restore_default_templates():
             return jsonify({'error': 'Failed to restore default templates'}), 500
     except Exception as e:
         logger.error(f"Error restoring default templates: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# ==================== Google OAuth Endpoints ====================
+
+@api_bp.route('/oauth/google/auth', methods=['GET'])
+@require_auth
+def google_oauth_auth():
+    """Initiate Google OAuth flow"""
+    try:
+        if not GOOGLE_OAUTH_CLIENT_ID or not GOOGLE_OAUTH_CLIENT_SECRET:
+            return jsonify({'error': 'Google OAuth not configured'}), 500
+        
+        # Create OAuth flow
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": GOOGLE_OAUTH_CLIENT_ID,
+                    "client_secret": GOOGLE_OAUTH_CLIENT_SECRET,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [GOOGLE_OAUTH_REDIRECT_URI]
+                }
+            },
+            scopes=GOOGLE_OAUTH_SCOPES
+        )
+        flow.redirect_uri = GOOGLE_OAUTH_REDIRECT_URI
+        
+        # Generate authorization URL
+        authorization_url, state = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent'  # Force consent screen to get refresh token
+        )
+        
+        return jsonify({
+            'authorization_url': authorization_url,
+            'state': state
+        })
+        
+    except Exception as e:
+        logger.error(f"Error initiating Google OAuth: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/oauth/google/callback', methods=['GET'])
+def google_oauth_callback():
+    """Handle Google OAuth callback"""
+    try:
+        if not GOOGLE_OAUTH_CLIENT_ID or not GOOGLE_OAUTH_CLIENT_SECRET:
+            return jsonify({'error': 'Google OAuth not configured'}), 500
+        
+        # Get authorization code from callback
+        code = request.args.get('code')
+        state = request.args.get('state')
+        
+        if not code:
+            error = request.args.get('error')
+            return jsonify({'error': f'OAuth error: {error}'}), 400
+        
+        # Create OAuth flow
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": GOOGLE_OAUTH_CLIENT_ID,
+                    "client_secret": GOOGLE_OAUTH_CLIENT_SECRET,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [GOOGLE_OAUTH_REDIRECT_URI]
+                }
+            },
+            scopes=GOOGLE_OAUTH_SCOPES,
+            state=state
+        )
+        flow.redirect_uri = GOOGLE_OAUTH_REDIRECT_URI
+        
+        # Exchange authorization code for tokens
+        flow.fetch_token(code=code)
+        
+        credentials = flow.credentials
+        
+        # Calculate expiration timestamp
+        expires_at = None
+        if credentials.expiry:
+            expires_at = int(credentials.expiry.timestamp())
+        
+        # Store credentials in database
+        success = db.store_oauth_credentials(
+            provider='google',
+            access_token=credentials.token,
+            refresh_token=credentials.refresh_token,
+            expires_at=expires_at,
+            scope=' '.join(credentials.scopes) if credentials.scopes else None,
+            client_id='default'
+        )
+        
+        if success:
+            # Redirect to frontend success page
+            frontend_url = os.getenv('FRONTEND_URL', 'https://vraisystems.netlify.app')
+            return redirect(f"{frontend_url}/oauth-success.html?provider=google")
+        else:
+            return jsonify({'error': 'Failed to store credentials'}), 500
+        
+    except Exception as e:
+        logger.error(f"Error in Google OAuth callback: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/oauth/google/status', methods=['GET'])
+@require_auth
+def google_oauth_status():
+    """Check Google OAuth connection status"""
+    try:
+        credentials_data = db.get_oauth_credentials('google', 'default')
+        
+        if not credentials_data:
+            return jsonify({
+                'connected': False,
+                'message': 'Not connected to Google Calendar'
+            })
+        
+        # Check if credentials are still valid
+        credentials = Credentials(
+            token=credentials_data['access_token'],
+            refresh_token=credentials_data['refresh_token'],
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=GOOGLE_OAUTH_CLIENT_ID,
+            client_secret=GOOGLE_OAUTH_CLIENT_SECRET,
+            scopes=credentials_data['scope'].split(' ') if credentials_data['scope'] else GOOGLE_OAUTH_SCOPES
+        )
+        
+        # Try to refresh if needed
+        if credentials.expired and credentials.refresh_token:
+            try:
+                credentials.refresh(Request())
+                
+                # Update stored credentials
+                expires_at = int(credentials.expiry.timestamp()) if credentials.expiry else None
+                db.update_oauth_access_token('google', credentials.token, expires_at, 'default')
+                
+            except Exception as refresh_error:
+                logger.error(f"Failed to refresh Google credentials: {str(refresh_error)}")
+                return jsonify({
+                    'connected': False,
+                    'message': 'Connection expired and could not be refreshed'
+                })
+        
+        return jsonify({
+            'connected': True,
+            'message': 'Connected to Google Calendar',
+            'expires_at': credentials_data['expires_at']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error checking Google OAuth status: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/oauth/google/disconnect', methods=['POST'])
+@require_auth
+def google_oauth_disconnect():
+    """Disconnect Google OAuth"""
+    try:
+        # Delete OAuth credentials
+        db.delete_oauth_credentials('google', 'default')
+        
+        # Delete selected calendar
+        db.delete_selected_calendar('default')
+        
+        return jsonify({
+            'success': True,
+            'message': 'Disconnected from Google Calendar'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error disconnecting Google OAuth: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# ==================== Calendar Management Endpoints ====================
+
+@api_bp.route('/calendars/list', methods=['GET'])
+@require_auth
+def list_calendars():
+    """List user's Google Calendars"""
+    try:
+        credentials_data = db.get_oauth_credentials('google', 'default')
+        
+        if not credentials_data:
+            return jsonify({'error': 'Not connected to Google Calendar'}), 400
+        
+        # Create credentials object
+        credentials = Credentials(
+            token=credentials_data['access_token'],
+            refresh_token=credentials_data['refresh_token'],
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=GOOGLE_OAUTH_CLIENT_ID,
+            client_secret=GOOGLE_OAUTH_CLIENT_SECRET,
+            scopes=credentials_data['scope'].split(' ') if credentials_data['scope'] else GOOGLE_OAUTH_SCOPES
+        )
+        
+        # Refresh if needed
+        if credentials.expired and credentials.refresh_token:
+            credentials.refresh(Request())
+            expires_at = int(credentials.expiry.timestamp()) if credentials.expiry else None
+            db.update_oauth_access_token('google', credentials.token, expires_at, 'default')
+        
+        # Build calendar service
+        from googleapiclient.discovery import build
+        service = build('calendar', 'v3', credentials=credentials)
+        
+        # Get calendar list
+        calendar_result = service.calendarList().list().execute()
+        calendars = calendar_result.get('items', [])
+        
+        # Format calendar data
+        formatted_calendars = []
+        for calendar in calendars:
+            formatted_calendars.append({
+                'id': calendar['id'],
+                'summary': calendar.get('summary', 'Unnamed Calendar'),
+                'description': calendar.get('description', ''),
+                'primary': calendar.get('primary', False),
+                'access_role': calendar.get('accessRole', 'reader')
+            })
+        
+        return jsonify({'calendars': formatted_calendars})
+        
+    except Exception as e:
+        logger.error(f"Error listing calendars: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/calendars/select', methods=['POST'])
+@require_auth
+def select_calendar():
+    """Select a calendar for appointments"""
+    try:
+        data = request.get_json()
+        
+        if not data or 'calendar_id' not in data:
+            return jsonify({'error': 'calendar_id is required'}), 400
+        
+        calendar_id = data['calendar_id']
+        calendar_name = data.get('calendar_name', 'Selected Calendar')
+        calendar_summary = data.get('calendar_summary', '')
+        
+        # Store selected calendar
+        success = db.set_selected_calendar(
+            calendar_id=calendar_id,
+            calendar_name=calendar_name,
+            calendar_summary=calendar_summary,
+            client_id='default'
+        )
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Calendar "{calendar_name}" selected for appointments'
+            })
+        else:
+            return jsonify({'error': 'Failed to save calendar selection'}), 500
+        
+    except Exception as e:
+        logger.error(f"Error selecting calendar: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/calendars/selected', methods=['GET'])
+@require_auth
+def get_selected_calendar():
+    """Get the currently selected calendar"""
+    try:
+        calendar_data = db.get_selected_calendar('default')
+        
+        if not calendar_data:
+            return jsonify({
+                'selected': False,
+                'message': 'No calendar selected'
+            })
+        
+        return jsonify({
+            'selected': True,
+            'calendar': calendar_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting selected calendar: {str(e)}")
         return jsonify({'error': str(e)}), 500

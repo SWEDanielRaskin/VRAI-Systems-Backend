@@ -3,7 +3,8 @@ import logging
 from datetime import datetime, timedelta
 import pytz
 from typing import Dict, List, Optional
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from config import BUSINESS_FULL_NAME, TIMEZONE
@@ -11,13 +12,18 @@ from config import BUSINESS_FULL_NAME, TIMEZONE
 logger = logging.getLogger(__name__)
 
 class GoogleCalendarService:
-    """Service for integrating with Google Calendar API"""
+    """Service for integrating with Google Calendar API using OAuth"""
     
-    def __init__(self):
-        self.credentials_file = "google-calendar-credentials.json"
-        self.calendar_id = "6c47fac129953096abbd3281541234c4b3158f44bedb7eeeb7d6f52c61dca3c7@group.calendar.google.com"
+    def __init__(self, database_service=None, client_id='default'):
+        self.db = database_service
+        self.client_id = client_id
+        self.calendar_id = None  # Will be loaded from database
         self.timezone = TIMEZONE
         self.service = None
+        
+        # OAuth configuration
+        self.oauth_client_id = os.getenv('GOOGLE_OAUTH_CLIENT_ID')
+        self.oauth_client_secret = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET')
         
         # Business hours configuration
         self.business_hours = {
@@ -34,35 +40,70 @@ class GoogleCalendarService:
         self._initialize_service()
     
     def _initialize_service(self):
-        """Initialize Google Calendar service with credentials"""
+        """Initialize Google Calendar service with OAuth credentials"""
         try:
-            # Try to get credentials from environment variable first
-            credentials_json = os.environ.get('GOOGLE_CREDENTIALS_JSON')
+            if not self.db:
+                logger.error("❌ No database service provided for OAuth credentials")
+                self.service = None
+                return
             
-            if credentials_json:
-                # Use environment variable
-                import json
-                credentials_info = json.loads(credentials_json)
-                credentials = service_account.Credentials.from_service_account_info(
-                    credentials_info,
-                    scopes=['https://www.googleapis.com/auth/calendar']
-                )
-                logger.info("✅ Google Calendar service initialized with environment credentials")
+            if not self.oauth_client_id or not self.oauth_client_secret:
+                logger.error("❌ Google OAuth not configured (missing client ID or secret)")
+                self.service = None
+                return
+            
+            # Get OAuth credentials from database
+            credentials_data = self.db.get_oauth_credentials('google', self.client_id)
+            
+            if not credentials_data:
+                logger.warning("⚠️ No Google OAuth credentials found in database")
+                self.service = None
+                return
+            
+            # Load selected calendar from database
+            calendar_data = self.db.get_selected_calendar(self.client_id)
+            if calendar_data:
+                self.calendar_id = calendar_data['calendar_id']
+                logger.info(f"📅 Using calendar: {calendar_data['calendar_name']}")
             else:
-                # Fall back to file
-                credentials = service_account.Credentials.from_service_account_file(
-                    self.credentials_file,
-                    scopes=['https://www.googleapis.com/auth/calendar']
-                )
-                logger.info("✅ Google Calendar service initialized with file credentials")
+                logger.warning("⚠️ No calendar selected")
+            
+            # Create credentials object
+            credentials = Credentials(
+                token=credentials_data['access_token'],
+                refresh_token=credentials_data['refresh_token'],
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id=self.oauth_client_id,
+                client_secret=self.oauth_client_secret,
+                scopes=credentials_data['scope'].split(' ') if credentials_data['scope'] else ['https://www.googleapis.com/auth/calendar']
+            )
+            
+            # Refresh token if needed
+            if credentials.expired and credentials.refresh_token:
+                try:
+                    credentials.refresh(Request())
+                    
+                    # Update stored credentials
+                    expires_at = int(credentials.expiry.timestamp()) if credentials.expiry else None
+                    self.db.update_oauth_access_token('google', credentials.token, expires_at, self.client_id)
+                    logger.info("🔄 Google OAuth token refreshed")
+                    
+                except Exception as refresh_error:
+                    logger.error(f"❌ Failed to refresh Google OAuth token: {str(refresh_error)}")
+                    self.service = None
+                    return
             
             # Build the service
             self.service = build('calendar', 'v3', credentials=credentials)
-            logger.info("✅ Google Calendar service initialized successfully")
+            logger.info("✅ Google Calendar service initialized with OAuth credentials")
             
         except Exception as e:
             logger.error(f"❌ Failed to initialize Google Calendar service: {str(e)}")
             self.service = None
+    
+    def refresh_service(self):
+        """Refresh the service (useful when OAuth credentials or calendar selection changes)"""
+        self._initialize_service()
     
     def test_connection(self) -> Dict:
         """Test the Google Calendar API connection"""

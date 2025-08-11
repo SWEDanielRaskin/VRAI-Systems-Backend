@@ -234,6 +234,33 @@ class DatabaseService:
                 )
             ''')
             
+            # OAuth credentials table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS oauth_credentials (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    provider TEXT NOT NULL,  -- 'google' or 'square'
+                    access_token TEXT NOT NULL,
+                    refresh_token TEXT,
+                    expires_at INTEGER,
+                    scope TEXT,
+                    client_id TEXT,  -- identifier for which client this belongs to
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            ''')
+            
+            # Client calendar settings table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS client_calendar_settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    client_id TEXT NOT NULL,
+                    selected_calendar_id TEXT NOT NULL,
+                    calendar_name TEXT,
+                    calendar_summary TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            ''')
 
             
             # Migrate appointments table if needed (add missing columns)
@@ -2483,6 +2510,206 @@ class DatabaseService:
             
         except Exception as e:
             logger.error(f"❌ Error restoring default templates: {str(e)}")
+            return False
+
+    # ==================== OAuth Credentials Management ====================
+    
+    def store_oauth_credentials(self, provider: str, access_token: str, refresh_token: str = None, 
+                              expires_at: int = None, scope: str = None, client_id: str = 'default') -> bool:
+        """Store OAuth credentials for a provider"""
+        try:
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
+            
+            current_time = datetime.now(self.timezone).isoformat()
+            
+            # Delete existing credentials for this provider and client
+            cursor.execute('''
+                DELETE FROM oauth_credentials 
+                WHERE provider = ? AND client_id = ?
+            ''', (provider, client_id))
+            
+            # Insert new credentials
+            cursor.execute('''
+                INSERT INTO oauth_credentials 
+                (provider, access_token, refresh_token, expires_at, scope, client_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (provider, access_token, refresh_token, expires_at, scope, client_id, current_time, current_time))
+            
+            conn.commit()
+            conn.close()
+            
+            logger.info(f"✅ OAuth credentials stored for {provider}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error storing OAuth credentials: {str(e)}")
+            return False
+    
+    def get_oauth_credentials(self, provider: str, client_id: str = 'default') -> Optional[Dict]:
+        """Get OAuth credentials for a provider"""
+        try:
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT access_token, refresh_token, expires_at, scope, created_at, updated_at
+                FROM oauth_credentials 
+                WHERE provider = ? AND client_id = ?
+                ORDER BY updated_at DESC
+                LIMIT 1
+            ''', (provider, client_id))
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result:
+                return {
+                    'access_token': result[0],
+                    'refresh_token': result[1],
+                    'expires_at': result[2],
+                    'scope': result[3],
+                    'created_at': result[4],
+                    'updated_at': result[5]
+                }
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Error getting OAuth credentials: {str(e)}")
+            return None
+    
+    def update_oauth_access_token(self, provider: str, access_token: str, 
+                                expires_at: int = None, client_id: str = 'default') -> bool:
+        """Update just the access token (for token refresh)"""
+        try:
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
+            
+            current_time = datetime.now(self.timezone).isoformat()
+            
+            cursor.execute('''
+                UPDATE oauth_credentials 
+                SET access_token = ?, expires_at = ?, updated_at = ?
+                WHERE provider = ? AND client_id = ?
+            ''', (access_token, expires_at, current_time, provider, client_id))
+            
+            conn.commit()
+            conn.close()
+            
+            logger.info(f"✅ OAuth access token updated for {provider}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error updating OAuth access token: {str(e)}")
+            return False
+    
+    def delete_oauth_credentials(self, provider: str, client_id: str = 'default') -> bool:
+        """Delete OAuth credentials for a provider"""
+        try:
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                DELETE FROM oauth_credentials 
+                WHERE provider = ? AND client_id = ?
+            ''', (provider, client_id))
+            
+            conn.commit()
+            conn.close()
+            
+            logger.info(f"✅ OAuth credentials deleted for {provider}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error deleting OAuth credentials: {str(e)}")
+            return False
+    
+    # ==================== Calendar Settings Management ====================
+    
+    def set_selected_calendar(self, calendar_id: str, calendar_name: str, 
+                            calendar_summary: str = None, client_id: str = 'default') -> bool:
+        """Set the selected calendar for appointments"""
+        try:
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
+            
+            current_time = datetime.now(self.timezone).isoformat()
+            
+            # Delete existing calendar setting for this client
+            cursor.execute('''
+                DELETE FROM client_calendar_settings 
+                WHERE client_id = ?
+            ''', (client_id,))
+            
+            # Insert new calendar setting
+            cursor.execute('''
+                INSERT INTO client_calendar_settings 
+                (client_id, selected_calendar_id, calendar_name, calendar_summary, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (client_id, calendar_id, calendar_name, calendar_summary, current_time, current_time))
+            
+            conn.commit()
+            conn.close()
+            
+            logger.info(f"✅ Selected calendar set: {calendar_name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error setting selected calendar: {str(e)}")
+            return False
+    
+    def get_selected_calendar(self, client_id: str = 'default') -> Optional[Dict]:
+        """Get the selected calendar for appointments"""
+        try:
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT selected_calendar_id, calendar_name, calendar_summary, created_at, updated_at
+                FROM client_calendar_settings 
+                WHERE client_id = ?
+                ORDER BY updated_at DESC
+                LIMIT 1
+            ''', (client_id,))
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result:
+                return {
+                    'calendar_id': result[0],
+                    'calendar_name': result[1],
+                    'calendar_summary': result[2],
+                    'created_at': result[3],
+                    'updated_at': result[4]
+                }
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Error getting selected calendar: {str(e)}")
+            return None
+    
+    def delete_selected_calendar(self, client_id: str = 'default') -> bool:
+        """Delete the selected calendar setting"""
+        try:
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                DELETE FROM client_calendar_settings 
+                WHERE client_id = ?
+            ''', (client_id,))
+            
+            conn.commit()
+            conn.close()
+            
+            logger.info(f"✅ Selected calendar setting deleted")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error deleting selected calendar: {str(e)}")
             return False
 
    
