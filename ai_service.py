@@ -327,7 +327,7 @@ class AIReceptionist:
             },
             {
                 "name": "select_appointment_to_cancel",
-                "description": """MANDATORY: Use when customer provides a NUMBER to select an appointment from a list. When customer sees numbered appointments (1, 2, 3, 4) and responds with a number, IMMEDIATELY call this function. This function selects the appointment but does NOT cancel it - use confirm_cancellation afterwards.""",
+                "description": """Select which appointment to cancel when multiple appointments are found. Use when customer specifies which appointment they want (1, 2, 3, etc.). This function does NOT cancel appointments - it only selects which one. Use confirm_cancellation to actually cancel.""",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -345,12 +345,12 @@ class AIReceptionist:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "confirmation": {
+                        "event_id": {
                             "type": "string",
-                            "description": "Customer's confirmation response (e.g., 'yes', 'confirm', 'cancel it')"
+                            "description": "Selection number (1, 2, 3, 4) after confirmation response (yes, confirm, cancel it)"
                         }
                     },
-                    "required": ["confirmation"]
+                    "required": ["event_id"]
                 }
             },
             {
@@ -800,15 +800,11 @@ class AIReceptionist:
             SIMPLIFIED CANCELLATION FLOW:
             1. When customer wants to cancel: Ask "What phone number did you book the appointment with?"
             2. When customer provides phone number: IMMEDIATELY call search_appointments_by_phone function with their phone number
-            3A. If SINGLE appointment found: System auto-selects it and asks for confirmation
-            3B. If MULTIPLE appointments found: System shows numbered list (1, 2, 3, 4) and asks customer to choose
-            4. When customer provides a NUMBER (1, 2, 3, 4): IMMEDIATELY call select_appointment_to_cancel function with that number
-            5. When customer says "yes"/"confirm": Call confirm_cancellation function to execute the cancellation
+            3. If multiple appointments found: Customer selects one using select_appointment_to_cancel function
+            4. When customer confirms cancellation: Call confirm_cancellation function to execute the cancellation
             
             CRITICAL CANCELLATION RULES:
             - ALWAYS call search_appointments_by_phone function directly when customer provides phone number
-            - When customer responds with a NUMBER after seeing appointment list: ALWAYS call select_appointment_to_cancel function
-            - When customer says "yes"/"confirm" after appointment is selected: ALWAYS call confirm_cancellation function
             - DO NOT say "let me search" or "one moment" - search immediately and show results
             - The search function handles phone normalization automatically (yes/texting from/etc.)
 
@@ -1178,9 +1174,9 @@ class AIReceptionist:
             "event_id": actual_event_id
         }
     
-    def confirm_cancellation_function(self, confirmation: str, user_id: str = None):
-        """Handle final SMS cancellation confirmation"""
-        logger.info(f"🗑️ SMS Cancellation - Confirming cancellation with response: {confirmation}")
+    def confirm_cancellation_function(self, event_id: str, user_id: str = None):
+        """Handle SMS cancellation with smart selection and confirmation logic"""
+        logger.info(f"🗑️ SMS Cancellation - Processing request with event_id: {event_id}")
         
         if not user_id:
             return {
@@ -1196,17 +1192,59 @@ class AIReceptionist:
         logger.info(f"🔍 SMS Cancellation - State machine data: {state_machine.collected_data}")
         logger.info(f"🔍 SMS Cancellation - Found appointments: {len(state_machine.found_appointments)}")
         
-        # Get the actual Google Calendar event_id from state machine 
-        # (select_appointment_to_cancel_function already stored the real event ID)
+        # Check if appointment was already selected by select_appointment_to_cancel
         actual_event_id = state_machine.collected_data.get("appointment_selection")
-        if not actual_event_id:
+        
+        # Determine if event_id is a confirmation word or selection number
+        is_confirmation = event_id.lower().strip() in ["yes", "y", "yeah", "confirm", "cancel it", "sure", "ok", "okay"]
+        
+        if actual_event_id and is_confirmation:
+            # Scenario A: Appointment already selected, customer is confirming
+            logger.info(f"✅ SMS Cancellation - Scenario A: Using pre-selected appointment {actual_event_id}")
+            
+        elif actual_event_id and not is_confirmation:
+            # Edge case: Appointment selected but customer provided another number
+            logger.info(f"⚠️ SMS Cancellation - Appointment already selected ({actual_event_id}), but customer provided {event_id}")
+            # Use the already selected appointment
+            
+        elif not actual_event_id and not is_confirmation:
+            # Scenario B: No appointment selected, event_id is selection number - do selection first
+            logger.info(f"🎯 SMS Cancellation - Scenario B: No appointment pre-selected, selecting {event_id} now")
+            
+            # Call the selection logic inline
+            selection_result = self.select_appointment_to_cancel_function(event_id, user_id)
+            if not selection_result['success']:
+                return selection_result  # Return selection error
+                
+            # Now check if appointment was selected
+            actual_event_id = state_machine.collected_data.get("appointment_selection")
+            if not actual_event_id:
+                return {
+                    "success": False,
+                    "message": "Unable to select appointment. Please try again.",
+                    "error": "Selection failed to update state machine"
+                }
+                
+            # Return confirmation request - don't actually cancel yet
+            return {
+                "success": True,
+                "requires_confirmation": True,
+                "message": selection_result.get("message", "Are you sure you want to cancel this appointment? Reply with 'yes' to confirm."),
+                "selected_appointment": selection_result.get("selected_appointment"),
+                "event_id": actual_event_id
+            }
+            
+        else:
+            # Scenario C: No appointment selected and customer said "yes" - error state
+            logger.error(f"❌ SMS Cancellation - Customer confirmed but no appointment selected")
             return {
                 "success": False,
-                "message": "No appointment selected for cancellation. Please start over.",
+                "message": "No appointment selected for cancellation. Please start over by providing your phone number.",
                 "error": "No appointment_selection in state machine"
             }
         
-        logger.info(f"🗑️ SMS Cancellation - Using actual Google Calendar event_id: {actual_event_id}")
+        # At this point, we have a valid actual_event_id and are ready to cancel
+        logger.info(f"🗑️ SMS Cancellation - Proceeding with cancellation of event_id: {actual_event_id}")
         
         # Use the appointment service for validated cancellation
         cancellation_result = self.appointment_service.cancel_appointment_with_validation(actual_event_id)
