@@ -802,8 +802,18 @@ class OpenAIRealtimeService:
             }
         else:
             available_slots = result.get('available_slots', [])
+            
+            # Check if customer tried to book on a closed day
+            if result.get('closed_day'):
+                day_name = result.get('day_name', 'that day')
+                return {
+                    "success": False,
+                    "message": f"We are closed on {day_name}s. Please choose a different day when we're open.",
+                    "closed_day": True,
+                    "next_step": "datetime"
+                }
             # If the error is about time, prompt for new time only
-            if available_slots:
+            elif available_slots:
                 # Use the new check_availability with preferred_time
                 closest_slots = self.appointment_service.check_availability(date, service_to_use, preferred_time=time)
                 slots_text = ", ".join(closest_slots)
@@ -824,6 +834,51 @@ class OpenAIRealtimeService:
                     "available_services": [s['name'] for s in self.db.get_services()],
                     "next_step": "service"
                 }
+            # If the error is about specialist, prompt for new specialist
+            elif ('specialist' in result.get('error', '').lower() or 
+                  'staff' in result.get('error', '').lower() or 
+                  result.get('error', '').startswith("Specialist '")):
+                
+                error_message = result.get('error', '')
+                available_specialists = result.get('available_specialists', [])
+                if not available_specialists and self.db:
+                    available_specialists = self.db.get_active_staff_names()
+                
+                self.booking_state_machine.collected_data.pop("specialist_preference", None)
+                
+                # Check for specific inactive specialist message
+                if "not currently taking appointments" in error_message:
+                    # Specialist exists but is inactive
+                    if available_specialists:
+                        specialists_text = ", ".join(available_specialists)
+                        return {
+                            "success": False,
+                            "message": f"That specialist is not currently taking appointments. Our available specialists are: {specialists_text}. Which would you prefer, or would you like me to assign one for you?",
+                            "available_specialists": available_specialists,
+                            "next_step": "specialist_preference"
+                        }
+                    else:
+                        return {
+                            "success": False,
+                            "message": "That specialist is not currently taking appointments. I'll assign you our next available specialist.",
+                            "next_step": "specialist_preference"
+                        }
+                else:
+                    # Specialist doesn't exist
+                    if available_specialists:
+                        specialists_text = ", ".join(available_specialists)
+                        return {
+                            "success": False,
+                            "message": f"I couldn't find that specialist. Our available specialists are: {specialists_text}. Which would you prefer, or would you like me to assign one for you?",
+                            "available_specialists": available_specialists,
+                            "next_step": "specialist_preference"
+                        }
+                    else:
+                        return {
+                            "success": False,
+                            "message": "I couldn't find that specialist. I'll assign you our next available specialist.",
+                            "next_step": "specialist_preference"
+                        }
             else:
                 return {
                     "success": False,

@@ -478,6 +478,29 @@ class AppointmentService:
             
             # Check if slot is available
             if not self.calendar_service.check_slot_available(date, time, duration):
+                # First check if this is a closed day
+                if not self.calendar_service.is_business_day(date):
+                    # Parse date to get day name
+                    try:
+                        target_date = datetime.strptime(date, "%Y-%m-%d")
+                        day_name = target_date.strftime('%A')
+                        return {
+                            'success': False,
+                            'error': f"We are closed on {day_name}s",
+                            'available_slots': [],
+                            'closed_day': True,
+                            'day_name': day_name
+                        }
+                    except Exception:
+                        # Fallback if date parsing fails
+                        return {
+                            'success': False,
+                            'error': "We are closed on that day",
+                            'available_slots': [],
+                            'closed_day': True
+                        }
+                
+                # Not a closed day, just no available slots
                 available_slots = self.check_availability(date, service)
                 return {
                     'success': False,

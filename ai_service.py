@@ -1533,7 +1533,16 @@ class AIReceptionist:
                 error_message = result.get('error', '')
                 
                 # Check for specific error types and provide appropriate responses
-                if available_slots:
+                if result.get('closed_day'):
+                    # Customer tried to book on a closed day
+                    day_name = result.get('day_name', 'that day')
+                    return {
+                        "success": False,
+                        "error": result['error'],
+                        "closed_day": True,
+                        "message": f"We are closed on {day_name}s. Please choose a different day when we're open."
+                    }
+                elif available_slots:
                     # Time slot issue with alternatives available
                     # For up_next services, suggest using a generic service for availability
                     # since up_next service names might not match database services exactly

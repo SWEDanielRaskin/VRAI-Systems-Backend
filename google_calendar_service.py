@@ -285,6 +285,34 @@ Booked via AI Assistant
             logger.error(f"❌ Error getting availability: {str(e)}")
             return []
     
+    def is_business_day(self, date: str) -> bool:
+        """
+        Check if a given date is a business day
+        
+        Args:
+            date: Date in YYYY-MM-DD format
+            
+        Returns:
+            True if business day, False if closed
+        """
+        try:
+            target_date = datetime.strptime(date, "%Y-%m-%d")
+            day_name = target_date.strftime('%A').lower()
+            
+            # Check if day is within business hours
+            if day_name not in self.business_hours:
+                return False
+            
+            business_day = self.business_hours[day_name]
+            if business_day is None or business_day['start'] is None or business_day['end'] is None:
+                return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error checking if business day: {str(e)}")
+            return True  # Default to True to avoid false closures
+    
     def check_slot_available(self, date: str, time: str, duration: int = 30) -> bool:
         """
         Check if a specific time slot is available
