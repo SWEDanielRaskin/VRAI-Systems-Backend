@@ -491,14 +491,36 @@ class AppointmentService:
                     assigned_specialist = specialist_preference
                     logger.info(f"👥 Using preferred specialist: {assigned_specialist}")
                 else:
-                    # Specialist not found - return error with available specialists
-                    logger.warning(f"⚠️ Requested specialist '{specialist_preference}' not found in {self.specialists}")
-                    return {
-                        'success': False,
-                        'error': f"Specialist '{specialist_preference}' is not available",
-                        'available_specialists': self.specialists,
-                        'available_slots': []  # No slots to show since specialist issue
-                    }
+                    # Check if specialist exists but is inactive
+                    if self.db:
+                        staff_status = self.db.get_staff_status(specialist_preference)
+                        if staff_status and not staff_status['active']:
+                            # Specialist exists but is inactive
+                            logger.warning(f"⚠️ Requested specialist '{specialist_preference}' exists but is inactive")
+                            return {
+                                'success': False,
+                                'error': f"Specialist '{specialist_preference}' is not currently taking appointments",
+                                'available_specialists': self.specialists,
+                                'available_slots': []
+                            }
+                        else:
+                            # Specialist doesn't exist at all
+                            logger.warning(f"⚠️ Requested specialist '{specialist_preference}' not found in database")
+                            return {
+                                'success': False,
+                                'error': f"Specialist '{specialist_preference}' is not available",
+                                'available_specialists': self.specialists,
+                                'available_slots': []
+                            }
+                    else:
+                        # No database connection - fallback to generic error
+                        logger.warning(f"⚠️ Requested specialist '{specialist_preference}' not found in {self.specialists}")
+                        return {
+                            'success': False,
+                            'error': f"Specialist '{specialist_preference}' is not available",
+                            'available_specialists': self.specialists,
+                            'available_slots': []
+                        }
             else:
                 assigned_specialist = self.get_next_specialist()
             

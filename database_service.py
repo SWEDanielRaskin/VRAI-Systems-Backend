@@ -434,6 +434,26 @@ class DatabaseService:
             logger.error(f"❌ Error getting active staff names: {str(e)}")
             return []
     
+    def get_staff_status(self, name: str) -> Optional[Dict]:
+        """Get staff member status by name - returns None if not found, or dict with 'active' status"""
+        try:
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
+            cursor.execute("SELECT name, active FROM staff WHERE name = ?", (name,))
+            row = cursor.fetchone()
+            conn.close()
+            
+            if row:
+                return {
+                    'name': row[0],
+                    'active': bool(row[1])
+                }
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Error getting staff status for {name}: {str(e)}")
+            return None
+    
     def add_staff_member(self, name, position='Specialist', active=True):
         """Add a new staff member"""
         try:

@@ -1564,25 +1564,44 @@ class AIReceptionist:
                         "message": f"I couldn't find that service. Our services are: {services_text}. Which would you like?"
                     }
                 elif 'specialist' in error_message.lower() or 'staff' in error_message.lower() or error_message.startswith("Specialist '"):
-                    # Specialist not found - show available specialists
+                    # Specialist issue - check if it's inactive vs not found
                     available_specialists = result.get('available_specialists', [])
                     if not available_specialists and self.db:
                         available_specialists = self.db.get_active_staff_names()
                     
-                    if available_specialists:
-                        specialists_text = ", ".join(available_specialists)
-                        return {
-                            "success": False,
-                            "error": result['error'],
-                            "available_specialists": available_specialists,
-                            "message": f"I couldn't find that specialist. Our specialists are: {specialists_text}. Which would you prefer?"
-                        }
+                    # Check for specific inactive specialist message
+                    if "not currently taking appointments" in error_message:
+                        # Specialist exists but is inactive
+                        if available_specialists:
+                            specialists_text = ", ".join(available_specialists)
+                            return {
+                                "success": False,
+                                "error": result['error'],
+                                "available_specialists": available_specialists,
+                                "message": f"That specialist is not currently taking appointments. Our available specialists are: {specialists_text}. Which would you prefer?"
+                            }
+                        else:
+                            return {
+                                "success": False,
+                                "error": result['error'],
+                                "message": "That specialist is not currently taking appointments. I'll book your appointment with our next available specialist."
+                            }
                     else:
-                        return {
-                            "success": False,
-                            "error": result['error'],
-                            "message": "I'll book your appointment with our next available specialist."
-                        }
+                        # Specialist doesn't exist
+                        if available_specialists:
+                            specialists_text = ", ".join(available_specialists)
+                            return {
+                                "success": False,
+                                "error": result['error'],
+                                "available_specialists": available_specialists,
+                                "message": f"I couldn't find that specialist. Our available specialists are: {specialists_text}. Which would you prefer?"
+                            }
+                        else:
+                            return {
+                                "success": False,
+                                "error": result['error'],
+                                "message": "I'll book your appointment with our next available specialist."
+                            }
                 else:
                     # Generic error - likely no appointments available on that date
                     return {
