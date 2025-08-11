@@ -71,3 +71,4 @@ sqlite-web==0.6.0
 PyJWT==2.8.0
 fuzzywuzzy==0.18.0
 python-Levenshtein==0.21.1
+stripe==8.3.0

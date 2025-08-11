@@ -1,6 +1,6 @@
 # payment_service.py
 import os
-import requests
+import stripe
 import logging
 import json
 from datetime import datetime, timedelta
@@ -9,28 +9,30 @@ import uuid
 logger = logging.getLogger(__name__)
 
 class PaymentService:
-    """Service for handling show-up deposits via Square API"""
+    """Service for handling show-up deposits via Stripe API"""
     
     def __init__(self):
-        self.access_token = os.getenv('SQUARE_ACCESS_TOKEN')
-        self.application_id = os.getenv('SQUARE_APPLICATION_ID')
-        self.environment = os.getenv('SQUARE_ENVIRONMENT', 'sandbox')  # 'sandbox' or 'production'
+        # Stripe configuration
+        stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+        self.publishable_key = os.getenv('STRIPE_PUBLISHABLE_KEY')
+        self.environment = os.getenv('STRIPE_ENVIRONMENT', 'test')  # 'test' or 'live'
         
-        # Set base URL based on environment
-        if self.environment == 'production':
-            self.base_url = 'https://connect.squareup.com'
-        else:
-            self.base_url = 'https://connect.squareupsandbox.com'
+        # Webhook endpoint secret for verifying Stripe webhooks
+        self.webhook_secret = os.getenv('STRIPE_WEBHOOK_SECRET')
         
         # Default deposit amount (in cents)
         self.default_deposit_amount = 5000  # $50.00
         
         # Store payment records locally for tracking
         self.payments_file = 'payments.json'
+        
+        # Success URL after payment completion
+        self.success_url = os.getenv('STRIPE_SUCCESS_URL', 'https://omorfiamedspa.com/deposit-confirmation')
+        self.cancel_url = os.getenv('STRIPE_CANCEL_URL', 'https://omorfiamedspa.com/deposit-cancelled')
     
     def create_deposit_payment_link(self, appointment_data):
         """
-        Create a Square payment link for show-up deposit
+        Create a Stripe payment link for show-up deposit
         
         Args:
             appointment_data: Dict with appointment details
@@ -39,121 +41,99 @@ class PaymentService:
             Dict with payment link and tracking info
         """
         try:
-            # Generate unique idempotency key
-            idempotency_key = str(uuid.uuid4())
-            
             # Calculate deposit amount (could vary by service in future)
             deposit_amount = self.get_deposit_amount(appointment_data.get('service'))
             
-            # Format phone number for Square (they're very strict about format)
-            phone_number = appointment_data.get('phone', '')
-            formatted_phone = self.format_phone_for_square(phone_number)
-            
-            # Create payment request (removing problematic pre_populated_data for now)
-            payment_request = {
-                "idempotency_key": idempotency_key,
-                "ask_for_shipping_address": False,
-                "merchant_support_email": "info@omorfiamedspa.com",
-                "redirect_url": "https://omorfiamedspa.com/deposit-confirmation",  # Your success page
-                "order": {
-                    "location_id": os.getenv('SQUARE_LOCATION_ID'),
-                    "line_items": [
-                        {
-                            "name": f"Show-up Deposit - {appointment_data.get('service_name', 'Appointment')}",
-                            "quantity": "1",
-                            "base_price_money": {
-                                "amount": deposit_amount,
-                                "currency": "USD"
-                            },
-                            "note": f"Deposit for {appointment_data.get('name')} - {appointment_data.get('date')} {appointment_data.get('time')}"
-                        }
-                    ]
-                }
-            }
-            
-            headers = {
-                'Authorization': f'Bearer {self.access_token}',
-                'Content-Type': 'application/json',
-                'Square-Version': '2023-10-18'
-            }
-            
-            logger.info(f"💳 Creating payment link for {appointment_data.get('name')} - ${deposit_amount/100}")
-            
-            response = requests.post(
-                f"{self.base_url}/v2/online-checkout/payment-links",
-                headers=headers,
-                json=payment_request
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                payment_link = result.get('payment_link', {})
-                
-                # Store payment record for tracking
-                payment_record = {
-                    'payment_link_id': payment_link.get('id'),
-                    'order_id': payment_link.get('order_id'),
+            # Create a product for this deposit
+            product = stripe.Product.create(
+                name=f"Show-up Deposit - {appointment_data.get('service_name', 'Appointment')}",
+                description=f"Deposit for {appointment_data.get('name')} - {appointment_data.get('date')} {appointment_data.get('time')}",
+                metadata={
                     'appointment_id': appointment_data.get('id'),
                     'customer_name': appointment_data.get('name'),
                     'customer_phone': appointment_data.get('phone'),
-                    'amount': deposit_amount,
-                    'status': 'pending',
-                    'created_at': datetime.now().isoformat(),
                     'appointment_date': appointment_data.get('date'),
                     'appointment_time': appointment_data.get('time'),
                     'service': appointment_data.get('service')
                 }
-                
-                self.save_payment_record(payment_record)
-                
-                logger.info(f"✅ Payment link created: {payment_link.get('url')}")
-                
-                return {
-                    'success': True,
-                    'payment_url': payment_link.get('url'),
-                    'payment_link_id': payment_link.get('id'),
-                    'order_id': payment_link.get('order_id'),
-                    'amount': deposit_amount / 100,  # Convert to dollars for display
-                    'record': payment_record
+            )
+            
+            # Create a price for this product
+            price = stripe.Price.create(
+                product=product.id,
+                unit_amount=deposit_amount,
+                currency='usd',
+                metadata={
+                    'appointment_id': appointment_data.get('id')
                 }
-            else:
-                logger.error(f"❌ Square API error: {response.status_code} - {response.text}")
-                return {
-                    'success': False,
-                    'error': f"Payment link creation failed: {response.status_code}"
+            )
+            
+            # Create payment link
+            payment_link = stripe.PaymentLink.create(
+                line_items=[{
+                    'price': price.id,
+                    'quantity': 1,
+                }],
+                after_completion={
+                    'type': 'redirect',
+                    'redirect': {
+                        'url': self.success_url
+                    }
+                },
+                automatic_tax={'enabled': False},
+                billing_address_collection='required',
+                phone_number_collection={'enabled': True},
+                customer_creation='always',
+                metadata={
+                    'appointment_id': appointment_data.get('id'),
+                    'customer_name': appointment_data.get('name'),
+                    'customer_phone': appointment_data.get('phone'),
+                    'type': 'show_up_deposit'
                 }
-                
+            )
+            
+            # Store payment record for tracking
+            payment_record = {
+                'payment_link_id': payment_link.id,
+                'product_id': product.id,
+                'price_id': price.id,
+                'appointment_id': appointment_data.get('id'),
+                'customer_name': appointment_data.get('name'),
+                'customer_phone': appointment_data.get('phone'),
+                'amount': deposit_amount,
+                'status': 'pending',
+                'created_at': datetime.now().isoformat(),
+                'appointment_date': appointment_data.get('date'),
+                'appointment_time': appointment_data.get('time'),
+                'service': appointment_data.get('service')
+            }
+            
+            self.save_payment_record(payment_record)
+            
+            logger.info(f"✅ Stripe payment link created: {payment_link.url}")
+            
+            return {
+                'success': True,
+                'payment_url': payment_link.url,
+                'payment_link_id': payment_link.id,
+                'product_id': product.id,
+                'price_id': price.id,
+                'amount': deposit_amount / 100,  # Convert to dollars for display
+                'record': payment_record
+            }
+            
+        except stripe.error.StripeError as e:
+            logger.error(f"❌ Stripe API error: {str(e)}")
+            return {
+                'success': False,
+                'error': f"Payment link creation failed: {str(e)}"
+            }
         except Exception as e:
             logger.error(f"❌ Error creating payment link: {str(e)}")
             return {
                 'success': False,
                 'error': str(e)
             }
-    
-    def format_phone_for_square(self, phone):
-        """
-        Format phone number specifically for Square API requirements
-        Square expects E.164 format: +1XXXXXXXXXX
-        """
-        if not phone:
-            return None
-            
-        # Remove all non-digit characters
-        digits_only = ''.join(filter(str.isdigit, phone))
-        
-        # Handle different input formats
-        if len(digits_only) == 10:
-            # US number without country code: 3132044895 -> +13132044895
-            return f"+1{digits_only}"
-        elif len(digits_only) == 11 and digits_only.startswith('1'):
-            # US number with country code: 13132044895 -> +13132044895
-            return f"+{digits_only}"
-        elif phone.startswith('+1') and len(digits_only) == 11:
-            # Already in correct format
-            return phone
-        else:
-            # Default: assume US number and add +1
-            return f"+1{digits_only[-10:]}" if len(digits_only) >= 10 else None
     
     def get_deposit_amount(self, service):
         """
@@ -173,41 +153,38 @@ class PaymentService:
     def check_payment_status(self, payment_link_id):
         """Check if payment has been completed"""
         try:
-            headers = {
-                'Authorization': f'Bearer {self.access_token}',
-                'Square-Version': '2023-10-18'
-            }
+            # Get the payment link
+            payment_link = stripe.PaymentLink.retrieve(payment_link_id)
             
-            response = requests.get(
-                f"{self.base_url}/v2/online-checkout/payment-links/{payment_link_id}",
-                headers=headers
+            # Check if there are any successful payments for this link
+            # We need to search for checkout sessions created from this payment link
+            checkout_sessions = stripe.checkout.Session.list(
+                payment_link=payment_link_id,
+                limit=10
             )
             
-            if response.status_code == 200:
-                result = response.json()
-                payment_link = result.get('payment_link', {})
-                order_id = payment_link.get('order_id')
-                
-                # Check order status
-                order_response = requests.get(
-                    f"{self.base_url}/v2/orders/{order_id}",
-                    headers=headers
-                )
-                
-                if order_response.status_code == 200:
-                    order_data = order_response.json()
-                    order = order_data.get('order', {})
-                    state = order.get('state')  # 'OPEN', 'COMPLETED', 'CANCELED'
+            # Look for completed sessions
+            for session in checkout_sessions.data:
+                if session.payment_status == 'paid':
+                    # Get the payment intent to get more details
+                    payment_intent = stripe.PaymentIntent.retrieve(session.payment_intent)
                     
                     return {
                         'success': True,
-                        'status': state.lower() if state else 'unknown',
-                        'order': order
+                        'status': 'completed',
+                        'session': session,
+                        'payment_intent': payment_intent,
+                        'amount_received': payment_intent.amount_received
                     }
             
-            return {'success': False, 'error': 'Could not check payment status'}
+            # No completed payments found
+            return {
+                'success': True,
+                'status': 'pending',
+                'payment_link': payment_link
+            }
             
-        except Exception as e:
+        except stripe.error.StripeError as e:
             logger.error(f"❌ Error checking payment status: {str(e)}")
             return {'success': False, 'error': str(e)}
     
@@ -232,77 +209,116 @@ class PaymentService:
                     'error': 'Payment not completed, cannot refund'
                 }
             
-            # Get the payment ID from the order
-            order = status_check['order']
-            tenders = order.get('tenders', [])
-            
-            if not tenders:
-                return {
-                    'success': False,
-                    'error': 'No payment found for this order'
-                }
-            
-            payment_id = tenders[0].get('id')
+            payment_intent = status_check['payment_intent']
             amount_to_refund = payment_record['amount']
             
-            # Create refund request
-            refund_request = {
-                "idempotency_key": str(uuid.uuid4()),
-                "amount_money": {
-                    "amount": amount_to_refund,
-                    "currency": "USD"
-                },
-                "payment_id": payment_id,
-                "reason": reason
-            }
-            
-            headers = {
-                'Authorization': f'Bearer {self.access_token}',
-                'Content-Type': 'application/json',
-                'Square-Version': '2023-10-18'
-            }
-            
-            logger.info(f"💰 Processing refund for {payment_record['customer_name']} - ${amount_to_refund/100}")
-            
-            response = requests.post(
-                f"{self.base_url}/v2/refunds",
-                headers=headers,
-                json=refund_request
+            # Create refund
+            refund = stripe.Refund.create(
+                payment_intent=payment_intent.id,
+                amount=amount_to_refund,
+                reason='requested_by_customer',
+                metadata={
+                    'reason': reason,
+                    'appointment_id': payment_record['appointment_id'],
+                    'customer_name': payment_record['customer_name']
+                }
             )
             
-            if response.status_code == 200:
-                result = response.json()
-                refund = result.get('refund', {})
-                
-                # Update payment record
-                payment_record['status'] = 'refunded'
-                payment_record['refund_id'] = refund.get('id')
-                payment_record['refunded_at'] = datetime.now().isoformat()
-                payment_record['refund_reason'] = reason
-                
-                self.update_payment_record(payment_record)
-                
-                logger.info(f"✅ Refund processed: {refund.get('id')}")
-                
-                return {
-                    'success': True,
-                    'refund_id': refund.get('id'),
-                    'amount_refunded': amount_to_refund / 100,
-                    'status': refund.get('status')
-                }
-            else:
-                logger.error(f"❌ Refund failed: {response.status_code} - {response.text}")
-                return {
-                    'success': False,
-                    'error': f"Refund failed: {response.status_code}"
-                }
-                
+            # Update payment record
+            payment_record['status'] = 'refunded'
+            payment_record['refund_id'] = refund.id
+            payment_record['refunded_at'] = datetime.now().isoformat()
+            payment_record['refund_reason'] = reason
+            
+            self.update_payment_record(payment_record)
+            
+            logger.info(f"✅ Refund processed: {refund.id} - ${amount_to_refund/100}")
+            
+            return {
+                'success': True,
+                'refund_id': refund.id,
+                'amount_refunded': amount_to_refund / 100,
+                'status': refund.status
+            }
+            
+        except stripe.error.StripeError as e:
+            logger.error(f"❌ Stripe refund error: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
         except Exception as e:
             logger.error(f"❌ Error processing refund: {str(e)}")
             return {
                 'success': False,
                 'error': str(e)
             }
+    
+    def handle_webhook(self, payload, signature):
+        """
+        Handle Stripe webhook events
+        
+        Args:
+            payload: Raw request body
+            signature: Stripe signature header
+            
+        Returns:
+            Dict with processing result
+        """
+        try:
+            # Verify webhook signature
+            event = stripe.Webhook.construct_event(
+                payload, signature, self.webhook_secret
+            )
+            
+            logger.info(f"🔔 Stripe webhook received: {event['type']}")
+            
+            # Handle specific event types
+            if event['type'] == 'checkout.session.completed':
+                session = event['data']['object']
+                self._handle_payment_completed(session)
+                
+            elif event['type'] == 'payment_intent.succeeded':
+                payment_intent = event['data']['object']
+                self._handle_payment_succeeded(payment_intent)
+                
+            elif event['type'] == 'charge.dispute.created':
+                dispute = event['data']['object']
+                self._handle_dispute_created(dispute)
+            
+            return {'success': True, 'event_type': event['type']}
+            
+        except stripe.error.SignatureVerificationError as e:
+            logger.error(f"❌ Invalid webhook signature: {str(e)}")
+            return {'success': False, 'error': 'Invalid signature'}
+        except Exception as e:
+            logger.error(f"❌ Webhook processing error: {str(e)}")
+            return {'success': False, 'error': str(e)}
+    
+    def _handle_payment_completed(self, session):
+        """Handle successful payment completion"""
+        try:
+            appointment_id = session.get('metadata', {}).get('appointment_id')
+            if appointment_id:
+                # Update payment record status
+                payment_record = self.get_payment_by_appointment(appointment_id)
+                if payment_record:
+                    payment_record['status'] = 'completed'
+                    payment_record['completed_at'] = datetime.now().isoformat()
+                    payment_record['session_id'] = session['id']
+                    self.update_payment_record(payment_record)
+                    
+                    logger.info(f"💰 Payment completed for appointment {appointment_id}")
+        except Exception as e:
+            logger.error(f"❌ Error handling payment completion: {str(e)}")
+    
+    def _handle_payment_succeeded(self, payment_intent):
+        """Handle payment intent success"""
+        logger.info(f"💳 Payment succeeded: {payment_intent['id']}")
+    
+    def _handle_dispute_created(self, dispute):
+        """Handle chargeback/dispute"""
+        logger.warning(f"⚠️ Dispute created: {dispute['id']} - Amount: ${dispute['amount']/100}")
     
     def save_payment_record(self, payment_record):
         """Save payment record to local file"""
@@ -366,3 +382,7 @@ class PaymentService:
         except Exception as e:
             logger.error(f"❌ Error getting payment record: {str(e)}")
             return None
+    
+    def get_publishable_key(self):
+        """Get publishable key for frontend"""
+        return self.publishable_key
