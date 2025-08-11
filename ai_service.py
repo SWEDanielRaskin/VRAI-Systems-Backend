@@ -483,7 +483,7 @@ class AIReceptionist:
             # Add system reminder message to conversation history
             reminder_message = {
                 "role": "system",
-                "content": "Remember to use the appointment booking functions to collect the customer's information step by step. Always call the appropriate function after collecting each piece of information."
+                "content": "Remember to use the appointment booking functions to collect the customer's information step by step. Always call the appropriate function after collecting each piece of information. If the customer chooses a different service than up_next, don't ask them again about up_next."
             }
             
             # Insert the reminder before the last user message to ensure it's fresh context
@@ -1528,9 +1528,13 @@ class AIReceptionist:
                     "price": appointment['price']
                 }
             else:
-                # Booking failed - provide alternatives
+                # Booking failed - provide specific error handling based on error type
                 available_slots = result.get('available_slots', [])
+                error_message = result.get('error', '')
+                
+                # Check for specific error types and provide appropriate responses
                 if available_slots:
+                    # Time slot issue with alternatives available
                     # For up_next services, suggest using a generic service for availability
                     # since up_next service names might not match database services exactly
                     service_for_availability = service if not is_up_next_service else "Consultation"
@@ -1545,7 +1549,42 @@ class AIReceptionist:
                         "available_slots": closest_slots,
                         "message": f"That time isn't available. Here are some options for {date}: {slots_text}. Which time works for you?"
                     }
+                elif error_message.startswith('Unknown service'):
+                    # Service not found - show available services
+                    available_services = result.get('available_services', [])
+                    if not available_services and self.db:
+                        available_services = [s['name'] for s in self.db.get_services()]
+                    
+                    services_text = ", ".join(available_services) if available_services else "our available services"
+                    
+                    return {
+                        "success": False,
+                        "error": result['error'],
+                        "available_services": available_services,
+                        "message": f"I couldn't find that service. Our services are: {services_text}. Which would you like?"
+                    }
+                elif 'specialist' in error_message.lower() or 'staff' in error_message.lower() or error_message.startswith("Specialist '"):
+                    # Specialist not found - show available specialists
+                    available_specialists = result.get('available_specialists', [])
+                    if not available_specialists and self.db:
+                        available_specialists = self.db.get_active_staff_names()
+                    
+                    if available_specialists:
+                        specialists_text = ", ".join(available_specialists)
+                        return {
+                            "success": False,
+                            "error": result['error'],
+                            "available_specialists": available_specialists,
+                            "message": f"I couldn't find that specialist. Our specialists are: {specialists_text}. Which would you prefer?"
+                        }
+                    else:
+                        return {
+                            "success": False,
+                            "error": result['error'],
+                            "message": "I'll book your appointment with our next available specialist."
+                        }
                 else:
+                    # Generic error - likely no appointments available on that date
                     return {
                         "success": False,
                         "error": result['error'],

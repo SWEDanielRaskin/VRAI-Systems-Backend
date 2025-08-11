@@ -485,10 +485,20 @@ class AppointmentService:
                     'available_slots': available_slots
                 }
             
-            # Assign specialist
-            if specialist_preference and specialist_preference in self.specialists:
-                assigned_specialist = specialist_preference
-                logger.info(f"👥 Using preferred specialist: {assigned_specialist}")
+            # Assign specialist with validation
+            if specialist_preference:
+                if specialist_preference in self.specialists:
+                    assigned_specialist = specialist_preference
+                    logger.info(f"👥 Using preferred specialist: {assigned_specialist}")
+                else:
+                    # Specialist not found - return error with available specialists
+                    logger.warning(f"⚠️ Requested specialist '{specialist_preference}' not found in {self.specialists}")
+                    return {
+                        'success': False,
+                        'error': f"Specialist '{specialist_preference}' is not available",
+                        'available_specialists': self.specialists,
+                        'available_slots': []  # No slots to show since specialist issue
+                    }
             else:
                 assigned_specialist = self.get_next_specialist()
             
