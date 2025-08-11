@@ -1208,29 +1208,89 @@ class AIReceptionist:
             # Use the already selected appointment
             
         elif not actual_event_id and not is_confirmation:
-            # Scenario B: No appointment selected, event_id is selection number - do selection first
-            logger.info(f"🎯 SMS Cancellation - Scenario B: No appointment pre-selected, selecting {event_id} now")
+            # Scenario B: No appointment selected, event_id is selection number - do selection inline
+            logger.info(f"🎯 SMS Cancellation - Scenario B: No appointment pre-selected, selecting {event_id} inline")
             
-            # Call the selection logic inline
-            selection_result = self.select_appointment_to_cancel_function(event_id, user_id)
-            if not selection_result['success']:
-                return selection_result  # Return selection error
-                
-            # Now check if appointment was selected
-            actual_event_id = state_machine.collected_data.get("appointment_selection")
-            if not actual_event_id:
+            # Get found appointments from state machine
+            found_appointments = state_machine.get_found_appointments()
+            
+            if not found_appointments:
                 return {
                     "success": False,
-                    "message": "Unable to select appointment. Please try again.",
-                    "error": "Selection failed to update state machine"
+                    "message": "No appointments found for selection. Please start over.",
+                    "error": "No found_appointments in state machine"
                 }
+            
+            # Convert event_id to appointment selection
+            selected_appointment = None
+            
+            # Try to match by position number (1, 2, 3, etc.)
+            if event_id.isdigit():
+                try:
+                    position = int(event_id) - 1  # Convert to 0-based index
+                    if 0 <= position < len(found_appointments):
+                        selected_appointment = found_appointments[position]
+                        logger.info(f"🎯 SMS Cancellation - Selected appointment by position {event_id}: {selected_appointment['calendar_event_id']}")
+                except (ValueError, IndexError):
+                    pass
+            
+            # If not found by position, try exact event_id match
+            if not selected_appointment:
+                for appt in found_appointments:
+                    if appt['calendar_event_id'] == event_id:
+                        selected_appointment = appt
+                        logger.info(f"🎯 SMS Cancellation - Selected appointment by exact ID: {event_id}")
+                        break
+            
+            # If still not found, try service name or specialist match
+            if not selected_appointment:
+                event_id_lower = event_id.lower()
+                for appt in found_appointments:
+                    service_name = appt.get('service_name', '').lower()
+                    specialist = appt.get('specialist', '').lower()
+                    
+                    if (service_name in event_id_lower or 
+                        event_id_lower in service_name or
+                        specialist in event_id_lower or
+                        event_id_lower in specialist):
+                        selected_appointment = appt
+                        logger.info(f"🎯 SMS Cancellation - Selected appointment by description match: {appt['calendar_event_id']}")
+                        break
+            
+            if not selected_appointment:
+                # Log available appointments for debugging
+                available_appts = []
+                for i, appt in enumerate(found_appointments, 1):
+                    available_appts.append(f"{i}. {appt.get('service_name', 'Unknown')} with {appt.get('specialist', 'team')}")
                 
+                logger.error(f"🎯 SMS Cancellation - Could not find appointment with event_id '{event_id}'. Available: {available_appts}")
+                
+                return {
+                    "success": False,
+                    "message": f"I'm sorry, I couldn't find that appointment. Please reply with the number (1, 2, 3, etc.) of the appointment you'd like to cancel.",
+                    "error": "Appointment not found in search results",
+                    "available_appointments": available_appts
+                }
+            
+            # Populate state machine with selected appointment (instead of calling separate function)
+            actual_event_id = selected_appointment['calendar_event_id']
+            state_machine.add_collected_data("appointment_selection", actual_event_id)
+            logger.info(f"🎯 SMS Cancellation - Populated state machine with appointment: {actual_event_id}")
+            
+            # Format appointment details for confirmation
+            date_str = datetime.strptime(selected_appointment['appointment_date'], '%Y-%m-%d').strftime('%A, %B %d, %Y')
+            time_str = datetime.strptime(selected_appointment['appointment_time'], '%H:%M').strftime('%I:%M %p')
+            
+            confirmation_message = (f"Are you sure you want to cancel your {selected_appointment['service_name']} appointment "
+                                   f"on {date_str} at {time_str} with {selected_appointment['specialist'] or 'our team'}? "
+                                   f"Reply with 'yes' to confirm.")
+            
             # Return confirmation request - don't actually cancel yet
             return {
                 "success": True,
                 "requires_confirmation": True,
-                "message": selection_result.get("message", "Are you sure you want to cancel this appointment? Reply with 'yes' to confirm."),
-                "selected_appointment": selection_result.get("selected_appointment"),
+                "message": confirmation_message,
+                "selected_appointment": selected_appointment,
                 "event_id": actual_event_id
             }
             
