@@ -1602,3 +1602,256 @@ def get_selected_calendar():
     except Exception as e:
         logger.error(f"Error getting selected calendar: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+# ==================== Google Calendar Testing Endpoint ====================
+
+@api_bp.route('/test/google-calendar', methods=['GET'])
+@require_auth
+def test_google_calendar():
+    """Comprehensive test of all Google Calendar functionality"""
+    
+    test_results = {
+        'timestamp': datetime.now().isoformat(),
+        'overall_status': 'pending',
+        'tests': []
+    }
+    
+    try:
+        from google_calendar_service import GoogleCalendarService
+        from database_service import DatabaseService
+        
+        # Initialize services
+        db_service = DatabaseService()
+        calendar_service = GoogleCalendarService(database_service=db_service)
+        
+        # Test 1: Service Initialization
+        test_results['tests'].append({
+            'test': 'Service Initialization',
+            'status': 'pass' if calendar_service.service is not None else 'fail',
+            'message': 'Google Calendar service initialized successfully' if calendar_service.service else 'Failed to initialize service',
+            'details': f'Calendar ID: {calendar_service.calendar_id}' if calendar_service.calendar_id else 'No calendar selected'
+        })
+        
+        if not calendar_service.service:
+            test_results['overall_status'] = 'fail'
+            return jsonify(test_results)
+        
+        # Test 2: Connection Test
+        try:
+            connection_result = calendar_service.test_connection()
+            test_results['tests'].append({
+                'test': 'Connection Test',
+                'status': 'pass' if connection_result.get('success') else 'fail',
+                'message': connection_result.get('message', 'Unknown error'),
+                'details': connection_result
+            })
+        except Exception as e:
+            test_results['tests'].append({
+                'test': 'Connection Test',
+                'status': 'fail',
+                'message': f'Connection test failed: {str(e)}',
+                'details': None
+            })
+        
+        # Test 3: Calendar Access (List Events)
+        try:
+            from datetime import datetime as dt, timedelta
+            import pytz
+            eastern = pytz.timezone('America/New_York')
+            today = dt.now(eastern).date()
+            tomorrow = today + timedelta(days=1)
+            
+            # Try to get events for tomorrow
+            events = calendar_service.list_all_events(
+                time_min=f"{tomorrow}T00:00:00-05:00",
+                time_max=f"{tomorrow}T23:59:59-05:00"
+            )
+            
+            test_results['tests'].append({
+                'test': 'List Calendar Events',
+                'status': 'pass',
+                'message': f'Successfully retrieved {len(events)} events for {tomorrow}',
+                'details': f'Calendar has {len(events)} events tomorrow'
+            })
+        except Exception as e:
+            test_results['tests'].append({
+                'test': 'List Calendar Events',
+                'status': 'fail',
+                'message': f'Failed to list events: {str(e)}',
+                'details': None
+            })
+        
+        # Test 4: Availability Check
+        try:
+            tomorrow_str = tomorrow.strftime('%Y-%m-%d')
+            availability = calendar_service.get_availability(tomorrow_str, duration=30)
+            
+            test_results['tests'].append({
+                'test': 'Check Availability',
+                'status': 'pass',
+                'message': f'Successfully checked availability for {tomorrow_str}',
+                'details': f'Found {len(availability)} available 30-minute slots'
+            })
+        except Exception as e:
+            test_results['tests'].append({
+                'test': 'Check Availability',
+                'status': 'fail',
+                'message': f'Failed to check availability: {str(e)}',
+                'details': None
+            })
+        
+        # Test 5: Business Day Check
+        try:
+            is_business_day = calendar_service.is_business_day(tomorrow_str)
+            test_results['tests'].append({
+                'test': 'Business Day Check',
+                'status': 'pass',
+                'message': f'Successfully checked if {tomorrow_str} is a business day',
+                'details': f'{tomorrow_str} is {"" if is_business_day else "not "}a business day'
+            })
+        except Exception as e:
+            test_results['tests'].append({
+                'test': 'Business Day Check',
+                'status': 'fail',
+                'message': f'Failed to check business day: {str(e)}',
+                'details': None
+            })
+        
+        # Test 6: Create Test Appointment (and immediately delete it)
+        try:
+            # Find an available slot for tomorrow
+            if len(availability) > 0:
+                test_time = availability[0]  # Use first available slot
+                
+                # Create test appointment data
+                test_appointment = {
+                    'summary': '[TEST] Calendar Integration Test',
+                    'start_datetime': calendar_service.format_datetime_for_calendar(tomorrow_str, test_time),
+                    'end_datetime': calendar_service.format_datetime_for_calendar(
+                        tomorrow_str, 
+                        calendar_service._add_minutes_to_time(test_time, 30)
+                    ),
+                    'customer_name': 'Test Customer',
+                    'customer_phone': '+1234567890',
+                    'service': 'Test Service',
+                    'specialist': 'Test Specialist',
+                    'price': 100.0,
+                    'duration': 30
+                }
+                
+                # Create appointment
+                create_result = calendar_service.create_appointment(test_appointment)
+                
+                if create_result.get('success'):
+                    event_id = create_result['event_id']
+                    
+                    # Test 7: Verify Event Exists
+                    event_exists = calendar_service.check_event_exists(event_id)
+                    test_results['tests'].append({
+                        'test': 'Verify Created Event',
+                        'status': 'pass' if event_exists else 'fail',
+                        'message': 'Event verification successful' if event_exists else 'Created event not found',
+                        'details': f'Event ID: {event_id}'
+                    })
+                    
+                    # Test 8: Delete Test Appointment
+                    delete_result = calendar_service.delete_appointment(event_id)
+                    test_results['tests'].append({
+                        'test': 'Delete Test Appointment',
+                        'status': 'pass' if delete_result.get('success') else 'fail',
+                        'message': 'Test appointment cleaned up successfully' if delete_result.get('success') else 'Failed to clean up test appointment',
+                        'details': delete_result.get('message', 'No details')
+                    })
+                    
+                    test_results['tests'].append({
+                        'test': 'Create Test Appointment',
+                        'status': 'pass',
+                        'message': f'Successfully created and deleted test appointment at {test_time}',
+                        'details': f'Event ID: {event_id}'
+                    })
+                else:
+                    test_results['tests'].append({
+                        'test': 'Create Test Appointment',
+                        'status': 'fail',
+                        'message': f'Failed to create test appointment: {create_result.get("error", "Unknown error")}',
+                        'details': create_result
+                    })
+            else:
+                test_results['tests'].append({
+                    'test': 'Create Test Appointment',
+                    'status': 'skip',
+                    'message': 'No available slots found for tomorrow to test appointment creation',
+                    'details': 'Consider testing on a different day or adjusting business hours'
+                })
+                
+        except Exception as e:
+            test_results['tests'].append({
+                'test': 'Create Test Appointment',
+                'status': 'fail',
+                'message': f'Failed to test appointment creation: {str(e)}',
+                'details': None
+            })
+        
+        # Test 9: OAuth Token Validity
+        try:
+            credentials_data = db_service.get_oauth_credentials('google', 'default')
+            if credentials_data:
+                from google.oauth2.credentials import Credentials
+                from google.auth.transport.requests import Request
+                
+                credentials = Credentials(
+                    token=credentials_data['access_token'],
+                    refresh_token=credentials_data['refresh_token'],
+                    token_uri="https://oauth2.googleapis.com/token",
+                    client_id=calendar_service.oauth_client_id,
+                    client_secret=calendar_service.oauth_client_secret
+                )
+                
+                token_status = 'valid'
+                if credentials.expired:
+                    if credentials.refresh_token:
+                        token_status = 'expired_but_refreshable'
+                    else:
+                        token_status = 'expired_no_refresh'
+                
+                test_results['tests'].append({
+                    'test': 'OAuth Token Status',
+                    'status': 'pass' if token_status != 'expired_no_refresh' else 'fail',
+                    'message': f'Token status: {token_status}',
+                    'details': f'Expires at: {credentials_data.get("expires_at", "Unknown")}'
+                })
+            else:
+                test_results['tests'].append({
+                    'test': 'OAuth Token Status',
+                    'status': 'fail',
+                    'message': 'No OAuth credentials found',
+                    'details': 'User needs to connect Google Calendar'
+                })
+        except Exception as e:
+            test_results['tests'].append({
+                'test': 'OAuth Token Status',
+                'status': 'fail',
+                'message': f'Failed to check token status: {str(e)}',
+                'details': None
+            })
+        
+        # Determine overall status
+        failed_tests = [t for t in test_results['tests'] if t['status'] == 'fail']
+        if len(failed_tests) == 0:
+            test_results['overall_status'] = 'pass'
+        else:
+            test_results['overall_status'] = 'fail'
+            
+        test_results['summary'] = {
+            'total_tests': len(test_results['tests']),
+            'passed': len([t for t in test_results['tests'] if t['status'] == 'pass']),
+            'failed': len([t for t in test_results['tests'] if t['status'] == 'fail']),
+            'skipped': len([t for t in test_results['tests'] if t['status'] == 'skip'])
+        }
+        
+        return jsonify(test_results)
+        
+    except Exception as e:
+        test_results['overall_status'] = 'error'
+        test_results['error'] = str(e)
+        return jsonify(test_results), 500
