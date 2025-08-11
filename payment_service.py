@@ -25,10 +25,6 @@ class PaymentService:
         
         # Store payment records locally for tracking
         self.payments_file = 'payments.json'
-        
-        # Success URL after payment completion
-        self.success_url = os.getenv('STRIPE_SUCCESS_URL', 'https://omorfiamedspa.com/deposit-confirmation')
-        self.cancel_url = os.getenv('STRIPE_CANCEL_URL', 'https://omorfiamedspa.com/deposit-cancelled')
     
     def create_deposit_payment_link(self, appointment_data):
         """
@@ -75,9 +71,9 @@ class PaymentService:
                     'quantity': 1,
                 }],
                 after_completion={
-                    'type': 'redirect',
-                    'redirect': {
-                        'url': self.success_url
+                    'type': 'hosted_confirmation',
+                    'hosted_confirmation': {
+                        'custom_message': 'Thank you! Your deposit has been received and your appointment is confirmed. You will receive an SMS confirmation shortly.'
                     }
                 },
                 automatic_tax={'enabled': False},
