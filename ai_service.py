@@ -327,13 +327,13 @@ class AIReceptionist:
             },
             {
                 "name": "select_appointment_to_cancel",
-                "description": """Select which appointment to cancel when multiple appointments are found. Use when customer specifies which appointment they want (1, 2, 3, etc.). This function does NOT cancel appointments - it only selects which one. Use confirm_cancellation to actually cancel.""",
+                "description": """MANDATORY: Use when customer provides a NUMBER to select an appointment from a list. When customer sees numbered appointments (1, 2, 3, 4) and responds with a number, IMMEDIATELY call this function. This function selects the appointment but does NOT cancel it - use confirm_cancellation afterwards.""",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "event_id": {
                             "type": "string",
-                            "description": "Position number (1, 2, 3), event ID, or description of the appointment to select"
+                            "description": "The number the customer provided (1, 2, 3, 4, etc.) to select which appointment they want to cancel"
                         }
                     },
                     "required": ["event_id"]
@@ -800,11 +800,15 @@ class AIReceptionist:
             SIMPLIFIED CANCELLATION FLOW:
             1. When customer wants to cancel: Ask "What phone number did you book the appointment with?"
             2. When customer provides phone number: IMMEDIATELY call search_appointments_by_phone function with their phone number
-            3. If multiple appointments found: Customer selects one using select_appointment_to_cancel function
-            4. When customer confirms cancellation: Call confirm_cancellation function to execute the cancellation
+            3A. If SINGLE appointment found: System auto-selects it and asks for confirmation
+            3B. If MULTIPLE appointments found: System shows numbered list (1, 2, 3, 4) and asks customer to choose
+            4. When customer provides a NUMBER (1, 2, 3, 4): IMMEDIATELY call select_appointment_to_cancel function with that number
+            5. When customer says "yes"/"confirm": Call confirm_cancellation function to execute the cancellation
             
             CRITICAL CANCELLATION RULES:
             - ALWAYS call search_appointments_by_phone function directly when customer provides phone number
+            - When customer responds with a NUMBER after seeing appointment list: ALWAYS call select_appointment_to_cancel function
+            - When customer says "yes"/"confirm" after appointment is selected: ALWAYS call confirm_cancellation function
             - DO NOT say "let me search" or "one moment" - search immediately and show results
             - The search function handles phone normalization automatically (yes/texting from/etc.)
 
