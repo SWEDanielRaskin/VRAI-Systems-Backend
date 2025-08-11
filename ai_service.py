@@ -10,6 +10,7 @@ from knowledge_base_service import KnowledgeBaseService
 from booking_verification_service import BookingVerificationService
 from typing import Optional, List, Dict
 from config import BUSINESS_FULL_NAME, PYTZ_TIMEZONE
+from fuzzywuzzy import fuzz
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -445,6 +446,62 @@ class AIReceptionist:
             
         return hours['start'] <= current_time <= hours['end']
     
+    def detect_sms_booking_trigger(self, ai_response: str, threshold: int = 75) -> bool:
+        """
+        Detect if AI response matches the SMS booking trigger phrase
+        using fuzzy string matching with 75% threshold
+        """
+        trigger_phrase = "What phone number would you like to book with?"
+        
+        if not ai_response or not ai_response.strip():
+            return False
+        
+        # Use token_sort_ratio for better handling of word order differences
+        similarity = fuzz.token_sort_ratio(ai_response.lower().strip(), trigger_phrase.lower())
+        
+        logger.info(f"🔍 SMS booking trigger similarity: {similarity}% for response: '{ai_response[:100]}...'")
+        
+        is_match = similarity >= threshold
+        if is_match:
+            logger.info(f"🎯 SMS BOOKING TRIGGER DETECTED! Similarity: {similarity}% >= {threshold}%")
+        
+        return is_match
+    
+    def inject_sms_function_reminder(self, user_id: str):
+        """
+        Inject a system message to remind the AI to use appointment booking functions for SMS
+        This adds the message to the conversation history for the next AI response
+        """
+        if not user_id:
+            logger.warning("Cannot inject SMS reminder - No user ID provided")
+            return
+        
+        try:
+            # Get current conversation history
+            history = self.conversations.get(user_id, [])
+            
+            # Add system reminder message to conversation history
+            reminder_message = {
+                "role": "system",
+                "content": "Remember to use the appointment booking functions to collect the customer's information step by step. Always call the appropriate function after collecting each piece of information."
+            }
+            
+            # Insert the reminder before the last user message to ensure it's fresh context
+            if history:
+                # Insert reminder as the second-to-last message (before the user's message that triggered this)
+                history.insert(-1, reminder_message)
+            else:
+                # If no history, just add the reminder
+                history.append(reminder_message)
+            
+            # Update conversation history
+            self.conversations[user_id] = history
+            
+            logger.info("📢 Injected SMS function reminder message to guide AI behavior")
+            
+        except Exception as e:
+            logger.error(f"❌ Error injecting SMS function reminder: {str(e)}")
+    
     def execute_function(self, function_name: str, arguments: dict, user_id: str = None):
         """Execute the requested function and return results"""
         try:
@@ -860,6 +917,11 @@ class AIReceptionist:
             else:
                 # Regular response without function call
                 ai_message = message.content
+            
+            # NEW: Check for SMS booking trigger phrase and inject reminder if detected
+            if user_id and ai_message and self.detect_sms_booking_trigger(ai_message):
+                logger.info("🚨 SMS booking trigger detected - injecting function reminder")
+                self.inject_sms_function_reminder(user_id)
             
             # NEW: Log AI response for verification
             if user_id:
