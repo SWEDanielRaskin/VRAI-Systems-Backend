@@ -8,7 +8,7 @@ from database_service import DatabaseService
 from knowledge_base_service import KnowledgeBaseService
 import os
 from google_sheets_archiver import GoogleSheetsArchiver
-from config import PYTZ_TIMEZONE
+from config import PYTZ_TIMEZONE, TIMEZONE
 import jwt
 import os
 from functools import wraps
@@ -1618,9 +1618,9 @@ def get_calendar_embed_url():
         
         calendar_id = calendar_data['calendar_id']
         
-        # Generate Google Calendar embed URL
-        # Using Eastern timezone as default, but this could be made configurable
-        embed_url = f"https://calendar.google.com/calendar/embed?src={calendar_id}&ctz=America/New_York"
+        # Generate Google Calendar embed URL using timezone from config
+        # This syncs with the business timezone set in config.py
+        embed_url = f"https://calendar.google.com/calendar/embed?src={calendar_id}&ctz={TIMEZONE}"
         
         return jsonify({
             'success': True,
