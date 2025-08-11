@@ -1159,7 +1159,7 @@ class AIReceptionist:
         time_str = datetime.strptime(appointment['appointment_time'], '%H:%M').strftime('%I:%M %p')
         
         success_message = (f"Your {appointment['service_name']} appointment on {date_str} at {time_str} "
-                          f"has been cancelled successfully.")
+                          f"has been cancelled successfully. You will be sent a confirmation text shortly/")
         
         # Add refund information if applicable
         if cancellation_result.get('refund_result'):
