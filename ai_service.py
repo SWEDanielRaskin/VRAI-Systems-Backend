@@ -341,16 +341,16 @@ class AIReceptionist:
             },
             {
                 "name": "confirm_cancellation",
-                "description": """FINAL STEP: Execute the actual appointment cancellation when customer says YES/confirms. This is the ONLY function that actually cancels appointments. Use when customer confirms with words like 'yes', 'confirm', 'cancel it', etc. after they've selected which appointment to cancel.""",
+                "description": """FINAL STEP: Execute the actual appointment cancellation when customer says YES/confirms. This is the ONLY function that actually cancels appointments. Use when customer confirms with words like 'yes', 'confirm', 'cancel it', etc. The function automatically retrieves the selected appointment from the conversation state.""",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "event_id": {
+                        "confirmation": {
                             "type": "string",
-                            "description": "Appointment number or ID (can be '1', '2', etc. - the function will find the real event ID)"
+                            "description": "Customer's confirmation response (e.g., 'yes', 'confirm', 'cancel it')"
                         }
                     },
-                    "required": ["event_id"]
+                    "required": ["confirmation"]
                 }
             },
             {
@@ -1054,7 +1054,9 @@ class AIReceptionist:
         elif len(appointments) == 1:
             # Auto-select single appointment
             appointment = appointments[0]
+            logger.info(f"🎯 SMS Cancellation - Auto-selecting appointment: {appointment['calendar_event_id']}")
             state_machine.add_collected_data("appointment_selection", appointment['calendar_event_id'])
+            logger.info(f"🔍 SMS Cancellation - State machine after auto-select: {state_machine.collected_data}")
             
             # Format appointment details for confirmation
             date_str = datetime.strptime(appointment['appointment_date'], '%Y-%m-%d').strftime('%A, %B %d, %Y')
@@ -1172,9 +1174,9 @@ class AIReceptionist:
             "event_id": actual_event_id
         }
     
-    def confirm_cancellation_function(self, event_id: str, user_id: str = None):
+    def confirm_cancellation_function(self, confirmation: str, user_id: str = None):
         """Handle final SMS cancellation confirmation"""
-        logger.info(f"🗑️ SMS Cancellation - Confirming cancellation for user selection: {event_id}")
+        logger.info(f"🗑️ SMS Cancellation - Confirming cancellation with response: {confirmation}")
         
         if not user_id:
             return {
@@ -1185,6 +1187,10 @@ class AIReceptionist:
         
         # Get state machine for this user
         state_machine = self.get_cancellation_state_machine(user_id)
+        
+        # Debug: Log current state machine data
+        logger.info(f"🔍 SMS Cancellation - State machine data: {state_machine.collected_data}")
+        logger.info(f"🔍 SMS Cancellation - Found appointments: {len(state_machine.found_appointments)}")
         
         # Get the actual Google Calendar event_id from state machine 
         # (select_appointment_to_cancel_function already stored the real event ID)

@@ -1,69 +1,505 @@
-(venv) C:\Users\snowm\receptionist-idfk\project>python main.py
-INFO:__main__:🚀 Starting application with multiprocessing...
-INFO:__main__:✅ Flask server process started
-INFO:__main__:✅ WebSocket server process started
-INFO:__mp_main__:🔌 Starting WebSocket server on port 8080
-INFO:websocket_server:Starting WebSocket server on localhost:8080...
-INFO:websockets.server:server listening on [::1]:8080
-INFO:websockets.server:server listening on 127.0.0.1:8080
-INFO:websocket_server:WebSocket server running on ws://localhost:8080
-INFO:websocket_server:Make sure to expose this with: ngrok http 8080
-INFO:database_service:✅ Appointments table is up to date
-INFO:database_service:✅ Database initialized successfully
-INFO:knowledge_base_service:✅ OpenAI client initialized successfully
-INFO:knowledge_base_service:✅ Knowledge base tables initialized
-INFO:database_service:✅ Appointments table is up to date
-INFO:database_service:✅ Database initialized successfully
-INFO:database_service:✅ Appointments table is up to date
-INFO:database_service:✅ Database initialized successfully
-INFO:googleapiclient.discovery_cache:file_cache is only supported with oauth2client<4.0.0
-INFO:google_calendar_service:✅ Google Calendar service initialized successfully
-INFO:database_service:✅ Appointments table is up to date
-INFO:database_service:✅ Database initialized successfully
-INFO:database_service:✅ Appointments table is up to date
-INFO:database_service:✅ Database initialized successfully
-INFO:message_scheduler:📝 Scheduled messages database initialized
-INFO:apscheduler.scheduler:Scheduler started
-INFO:message_scheduler:✅ Message scheduler initialized with persistence
-INFO:appointment_service:👥 Loaded specialist counter: 0
-INFO:appointment_service:👥 Updated specialists from database: ['Carla Thomas']
-INFO:knowledge_base_service:✅ OpenAI client initialized successfully
-INFO:knowledge_base_service:✅ Knowledge base tables initialized
-INFO:database_service:✅ Appointments table is up to date
-INFO:database_service:✅ Database initialized successfully
-INFO:database_service:✅ Appointments table is up to date
-INFO:database_service:✅ Database initialized successfully
-INFO:database_service:✅ Appointments table is up to date
-INFO:database_service:✅ Database initialized successfully
-INFO:message_scheduler:📝 Scheduled messages database initialized
-INFO:apscheduler.scheduler:Scheduler started
-INFO:message_scheduler:✅ Message scheduler initialized with persistence
-INFO:googleapiclient.discovery_cache:file_cache is only supported with oauth2client<4.0.0
-INFO:google_calendar_service:✅ Google Calendar service initialized successfully
-INFO:database_service:✅ Appointments table is up to date
-INFO:database_service:✅ Database initialized successfully
-INFO:database_service:✅ Appointments table is up to date
-INFO:database_service:✅ Database initialized successfully
-INFO:message_scheduler:📝 Scheduled messages database initialized
-INFO:apscheduler.scheduler:Scheduler started
-INFO:message_scheduler:✅ Message scheduler initialized with persistence
-INFO:appointment_service:👥 Loaded specialist counter: 0
-INFO:appointment_service:👥 Updated specialists from database: ['Carla Thomas']
-INFO:knowledge_base_service:✅ OpenAI client initialized successfully
-INFO:knowledge_base_service:✅ Knowledge base tables initialized
-INFO:apscheduler.scheduler:Adding job tentatively -- it will be properly scheduled when the scheduler starts
-INFO:apscheduler.scheduler:Adding job tentatively -- it will be properly scheduled when the scheduler starts
-INFO:apscheduler.scheduler:Added job "trigger_daily_archive" to job store "default"
-INFO:apscheduler.scheduler:Added job "trigger_weekly_archive" to job store "default"
-INFO:apscheduler.scheduler:Scheduler started
-INFO:apscheduler.scheduler:Adding job tentatively -- it will be properly scheduled when the scheduler starts
-INFO:apscheduler.scheduler:Added job "AppointmentService.sync_appointments_with_google_calendar" to job store "default"
-INFO:apscheduler.scheduler:Scheduler started
-INFO:__mp_main__:🚀 Starting Flask HTTP server on port 5000
- * Serving Flask app 'app'
- * Debug mode: off
-INFO:werkzeug:WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
- * Running on all addresses (0.0.0.0)
- * Running on http://127.0.0.1:5000
- * Running on http://192.168.1.11:5000
-INFO:werkzeug:Press CTRL+C to quit
+ "text": "Please confirm cancellation of your Microneedling appointment on Aug 15 at 03:30 PM by replying with \"yes\" or \"confirm.\"",
+
+      "to": [
+
+        {
+
+          "carrier": "OMNIPOINT COMMUNICATIONS MIDWEST OPERATIONS, LLC",
+
+          "line_type": "Wireless",
+
+          "phone_number": "+13132044895",
+
+          "status": "sent"
+
+        }
+
+      ],
+
+      "type": "SMS",
+
+      "valid_until": "2025-08-11T05:55:03.634+00:00",
+
+      "webhook_failover_url": "",
+
+      "webhook_url": "https://vraisystems.up.railway.app/message";
+
+    },
+
+    "record_type": "event"
+
+  },
+
+  "meta": {
+
+    "attempt": 1,
+
+    "delivered_to": "https://vraisystems.up.railway.app/message";
+
+  }
+
+}
+
+INFO:app:✅ New message processed: 40319897-7b66-4c0a-9d19-975a4ef6b88c (Cache size: 6)
+
+INFO:app:📱 Skipping outbound message: outbound
+
+INFO:werkzeug:100.64.0.5 - - [11/Aug/2025 04:55:03] "POST /message HTTP/1.1" 200 -
+
+INFO:app:📱 SMS received. Headers: {'Host': 'vraisystems.up.railway.app', 'User-Agent': 'telnyx-webhooks', 'Content-Length': '1910', 'Content-Type': 'application/json', 'Telnyx-Signature-Ed25519': 'onFX8l3X47UTF+yc0SPJRvTypPHZdcqvBDJFpzGDl223brDEx/uwQq6/opXFjDkcReG2L7fWcSCIZvNtBH7xAg==', 'Telnyx-Timestamp': '1754888104', 'X-Forwarded-For': '192.76.120.151', 'X-Forwarded-Host': 'vraisystems.up.railway.app', 'X-Forwarded-Proto': 'https', 'X-Railway-Edge': 'railway/us-west2', 'X-Railway-Request-Id': 'XBOLKtjiShmA1xyTnpoFkQ', 'X-Real-Ip': '192.76.120.151', 'X-Request-Start': '1754888104960', 'Accept-Encoding': 'gzip'}
+
+INFO:app:📱 SMS data: {
+
+  "data": {
+
+    "event_type": "message.finalized",
+
+    "id": "b22f3507-6af8-4c20-b9ea-ae70382e8e28",
+
+    "occurred_at": "2025-08-11T04:55:04.817+00:00",
+
+    "payload": {
+
+      "cc": [],
+
+      "completed_at": "2025-08-11T04:55:04.817+00:00",
+
+      "cost": {
+
+        "amount": "0.0085",
+
+        "currency": "USD"
+
+      },
+
+      "cost_breakdown": {
+
+        "carrier_fee": {
+
+          "amount": "0.00300",
+
+          "currency": "USD"
+
+        },
+
+        "rate": {
+
+          "amount": "0.00550",
+
+          "currency": "USD"
+
+        }
+
+      },
+
+      "direction": "outbound",
+
+      "encoding": "GSM-7",
+
+      "errors": [],
+
+      "from": {
+
+        "carrier": "Telnyx",
+
+        "line_type": "Wireless",
+
+        "phone_number": "+18773900002"
+
+      },
+
+      "id": "40319897-7b66-4c0a-9d19-975a4ef6b88c",
+
+      "media": [],
+
+      "messaging_profile_id": "40019736-4349-4cde-8878-64c12ca9c70e",
+
+      "organization_id": "8c8fdc6f-f1bb-4bad-a6d5-1a766f415bea",
+
+      "parts": 1,
+
+      "received_at": "2025-08-11T04:55:03.634+00:00",
+
+      "record_type": "message",
+
+      "sent_at": "2025-08-11T04:55:03.769+00:00",
+
+      "tags": [],
+
+      "tcr_campaign_billable": false,
+
+      "tcr_campaign_id": null,
+
+      "tcr_campaign_registered": null,
+
+      "text": "Please confirm cancellation of your Microneedling appointment on Aug 15 at 03:30 PM by replying with \"yes\" or \"confirm.\"",
+
+      "to": [
+
+        {
+
+          "carrier": "OMNIPOINT COMMUNICATIONS MIDWEST OPERATIONS, LLC",
+
+          "line_type": "Wireless",
+
+          "phone_number": "+13132044895",
+
+          "status": "delivered"
+
+        }
+
+      ],
+
+      "type": "SMS",
+
+      "valid_until": "2025-08-11T05:55:03.634+00:00",
+
+      "webhook_failover_url": "",
+
+      "webhook_url": "https://vraisystems.up.railway.app/message";
+
+    },
+
+    "record_type": "event"
+
+  },
+
+  "meta": {
+
+    "attempt": 1,
+
+    "delivered_to": "https://vraisystems.up.railway.app/message";
+
+  }
+
+}
+
+INFO:app:🔄 Skipping duplicate message: 40319897-7b66-4c0a-9d19-975a4ef6b88c
+
+INFO:werkzeug:100.64.0.8 - - [11/Aug/2025 04:55:05] "POST /message HTTP/1.1" 200 -
+
+INFO:app:📱 SMS received. Headers: {'Host': 'vraisystems.up.railway.app', 'User-Agent': 'telnyx-webhooks', 'Content-Length': '1650', 'Content-Type': 'application/json', 'Telnyx-Signature-Ed25519': 'NY11rsDQLyZWeYzQfLymUXSVG1SD6mhec1nsQcVNmlhGLkManDGVxwJ8sl1K4Cl8ABwiVPNfMemEXmvA/9NCAw==', 'Telnyx-Timestamp': '1754888111', 'X-Forwarded-For': '192.76.120.128', 'X-Forwarded-Host': 'vraisystems.up.railway.app', 'X-Forwarded-Proto': 'https', 'X-Railway-Edge': 'railway/us-east4-eqdc4a', 'X-Railway-Request-Id': 'zDMICnQlQkqvabCcezItjw', 'X-Real-Ip': '192.76.120.128', 'X-Request-Start': '1754888111842', 'Accept-Encoding': 'gzip'}
+
+INFO:app:📱 SMS data: {
+    NFO:app:📱 SMS data: {
+
+  "data": {
+
+    "event_type": "message.received",
+
+    "id": "79452b29-fa27-4159-a903-d22ff4e68119",
+
+    "occurred_at": "2025-08-11T04:55:11.575+00:00",
+
+    "payload": {
+
+      "autoresponse_type": null,
+
+      "cc": [],
+
+      "completed_at": null,
+
+      "cost": {
+
+        "amount": "0.0085",
+
+        "currency": "USD"
+
+      },
+
+      "cost_breakdown": {
+
+        "carrier_fee": {
+
+          "amount": "0.00300",
+
+          "currency": "USD"
+
+        },
+
+        "rate": {
+
+          "amount": "0.00550",
+
+          "currency": "USD"
+
+        }
+
+      },
+
+      "direction": "inbound",
+
+      "encoding": "GSM-7",
+
+      "errors": [],
+
+      "from": {
+
+        "carrier": "T-Mobile USA",
+
+        "line_type": "Wireless",
+
+        "phone_number": "+13132044895"
+
+      },
+
+      "id": "ab11f677-5273-4c0f-8af8-d1573a1d3706",
+
+      "is_spam": false,
+
+      "media": [],
+
+      "messaging_profile_id": "40019736-4349-4cde-8878-64c12ca9c70e",
+
+      "organization_id": "8c8fdc6f-f1bb-4bad-a6d5-1a766f415bea",
+
+      "parts": 1,
+
+      "received_at": "2025-08-11T04:55:11.397+00:00",
+
+      "record_type": "message",
+
+      "sent_at": null,
+
+      "subject": "",
+
+      "tags": [],
+
+      "text": "Yes",
+
+      "to": [
+
+        {
+
+          "carrier": "Telnyx",
+
+          "line_type": "Wireless",
+
+          "phone_number": "+18773900002",
+
+          "status": "webhook_delivered"
+
+        }
+
+      ],
+
+      "type": "SMS",
+
+      "valid_until": null,
+
+      "webhook_failover_url": null,
+
+      "webhook_url": "https://vraisystems.up.railway.app/message";
+
+    },
+
+    "record_type": "event"
+
+  },
+
+  "meta": {
+
+    "attempt": 1,
+
+    "delivered_to": "https://vraisystems.up.railway.app/message";
+
+  }
+
+}
+
+INFO:app:✅ New message processed: ab11f677-5273-4c0f-8af8-d1573a1d3706 (Cache size: 7)
+
+INFO:app:📱 Debug - Full payload direction: inbound
+
+INFO:app:📱 Debug - From object: {'carrier': 'T-Mobile USA', 'line_type': 'Wireless', 'phone_number': '+13132044895'}
+
+INFO:app:📱 Debug - To object: [{'carrier': 'Telnyx', 'line_type': 'Wireless', 'phone_number': '+18773900002', 'status': 'webhook_delivered'}]
+
+INFO:app:📱 SMS conversation - Customer: +13132044895 → Business: +18773900002
+
+INFO:app:📱 Message: Yes
+
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+
+INFO:ai_service:🔧 AI chose to call functions: 1 function(s)
+
+INFO:ai_service:🔧 AI calling function: confirm_cancellation with args: {'event_id': '4'}
+
+INFO:ai_service:🔧 AI calling function: confirm_cancellation with args: {'event_id': '4'}
+
+INFO:ai_service:🔧 Executing function: confirm_cancellation with arguments: {'event_id': '4'}
+
+INFO:ai_service:🗑️ SMS Cancellation - Confirming cancellation for user selection: 4
+
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+
+INFO:ai_service:🔍 SMS booking trigger similarity: 34% for response: 'It seems there was an issue with the cancellation. Please confirm again: Would you like to cancel yo...'
+
+INFO:booking_verification_service:📝 Logged AI response for +13132044895: It seems there was an issue with the cancellation....
+
+INFO:database_service:✅ Message exchange logged for +13132044895
+
+INFO:root:[SSE] Broadcasting event to 0 clients: {"type": "new_message", "phone": "+13132044895"}
+
+INFO:app:🔍 Checking for notifications in conversation +13132044895
+
+INFO:app:🔍 Analyzing 88 messages after timestamp 2025-08-04T23:29:10.792452-04:00
+
+INFO:ai_summarizer:👽 Notification detection using summary: 
+
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+
+INFO:ai_summarizer:🚨 Notification detected: urgent - Repeated appointment booking and cancellation failures
+
+INFO:database_service:🔄 Replacing existing notification: urgent for +13132044895 (sms)
+
+INFO:database_service:🔄 Notification replaced: Repeated appointment booking and cancellation failures (ID: 12)
+
+INFO:app:🚨 Notification created: Repeated appointment booking and cancellation failures
+
+INFO:root:[SSE] Broadcasting event to 0 clients: {"type": "notification_created"}
+
+INFO:app:📱 Sending reply - Business: +18773900002 → Customer: +13132044895
+
+INFO:sms_service:📱 Sending SMS from +18773900002 to +13132044895: It seems there was an issue with the cancellation. Please confirm again: Would you like to cancel your Microneedling appointment on Aug 15 at 03:30 PM? Reply with "yes" or "confirm."
+
+INFO:sms_service:✅ SMS sent successfully to +13132044895
+
+INFO:app:📱 SMS response sent to +13132044895: It seems there was an issue with the cancellation. Please confirm again: Would you like to cancel your Microneedling appointment on Aug 15 at 03:30 PM? Reply with "yes" or "confirm."
+
+INFO:werkzeug:100.64.0.6 - - [11/Aug/2025 04:55:16] "POST /message HTTP/1.1" 200 -
+
+INFO:app:📱 SMS received. Headers: {'Host': 'vraisystems.up.railway.app', 'User-Agent': 'telnyx-webhooks', 'Content-Length': '1935', 'Content-Type': 'application/json', 'Telnyx-Signature-Ed25519': 'J35/sUyPiN+OGdUCvomrO8fzGT26snBpaOQKky23e63j5MvZucCLri9gV+5pmJDZKwfREgXxNrVtc/MmJc3cBQ==', 'Telnyx-Timestamp': '1754888116', 'X-Forwarded-For': '192.76.120.128', 'X-Forwarded-Host': 'vraisystems.up.railway.app', 'X-Forwarded-Proto': 'https', 'X-Railway-Edge': 'railway/us-east4-eqdc4a', 'X-Railway-Request-Id': 'zlINn6m4RUaLku3TozsQ6Q', 'X-Real-Ip': '192.76.120.128', 'X-Request-Start': '1754888117005', 'Accept-Encoding': 'gzip'}
+INFO:app:📱 SMS data: {
+
+  "data": {
+
+    "event_type": "message.sent",
+
+    "id": "23e9b3bb-b97b-4e30-ae89-d2266ccc29da",
+
+    "occurred_at": "2025-08-11T04:55:16.844+00:00",
+
+    "payload": {
+
+      "cc": [],
+
+      "completed_at": null,
+
+      "cost": {
+
+        "amount": "0.0170",
+
+        "currency": "USD"
+
+      },
+
+      "cost_breakdown": {
+
+        "carrier_fee": {
+
+          "amount": "0.00600",
+
+          "currency": "USD"
+
+        },
+
+        "rate": {
+
+          "amount": "0.01100",
+
+          "currency": "USD"
+
+        }
+
+      },
+
+      "direction": "outbound",
+
+      "encoding": "GSM-7",
+
+      "errors": [],
+
+      "from": {
+
+        "carrier": "Telnyx",
+
+        "line_type": "Wireless",
+
+        "phone_number": "+18773900002"
+
+      },
+
+      "id": "40319897-7b99-4d84-841c-3fe957d1ae73",
+
+      "media": [],
+
+      "messaging_profile_id": "40019736-4349-4cde-8878-64c12ca9c70e",
+
+      "organization_id": "8c8fdc6f-f1bb-4bad-a6d5-1a766f415bea",
+
+      "parts": 2,
+
+      "received_at": "2025-08-11T04:55:16.695+00:00",
+
+      "record_type": "message",
+
+      "sent_at": "2025-08-11T04:55:16.844+00:00",
+
+      "tags": [],
+
+      "tcr_campaign_billable": false,
+
+      "tcr_campaign_id": null,
+
+      "tcr_campaign_registered": null,
+
+      "text": "It seems there was an issue with the cancellation. Please confirm again: Would you like to cancel your Microneedling appointment on Aug 15 at 03:30 PM? Reply with \"yes\" or \"confirm.\"",
+
+      "to": [
+
+        {
+
+          "carrier": "OMNIPOINT COMMUNICATIONS MIDWEST OPERATIONS, LLC",
+
+          "line_type": "Wireless",
+
+          "phone_number": "+13132044895",
+
+          "status": "sent"
+
+        }
+
+      ],
+
+      "type": "SMS",
+
+      "valid_until": "2025-08-11T05:55:16.695+00:00",
+
+      "webhook_failover_url": "",
+
+      "webhook_url": "https://vraisystems.up.railway.app/message";
+
+    },
+
+    "record_type": "event"
+
+  },
+
+  "meta": {
+
+    "attempt": 1,
+
+    "delivered_to": "https://vraisystems.up.railway.app/message";
+
+  }
+
+}
+
+INFO:app:✅ New message processed: 40319897-7b99-4d84-841c-3fe957d1ae73 (Cache size: 8)
+
+INFO:app:📱 Skipping outbound message: outbound
+
+INFO:werkzeug:100.64.0.9 - - [11/Aug/2025 04:55:17] "POST /message HTTP/1.1" 200 -
+
+INFO:app:📱 SMS received. Headers: {'Host': 'vraisystems.up.railway.app', 'User-Agent': 'telnyx-webhooks', 'Content-Length': '1972', 'Content-Type': 'application/json', 'Telnyx-Signature-Ed25519': 'ULagQFl3EaLPuQ532OuUqJeqeugPUWO8mGhHBhRRMDcXRpardBKk4DXsF/D9Xo2bZYaEfFarqZnLFf0mEUvbCw==', 'Telnyx-Timestamp': '1754888118', 'X-Forwarded-For': '192.76.120.128', 'X-Forwarded-Host': 'vraisystems.up.railway.app', 'X-Forwarded-Proto': 'https', 'X-Railway-Edge': 'railway/us-east4-eqdc4a', 'X-Railway-Request-Id': 'LZllcLLERJO-WSOkezItjw', 'X-Real-Ip': '192.76.120.128', 'X-Request-Start': '1754888118463', 'Accept-Encoding': 'gzip'}
