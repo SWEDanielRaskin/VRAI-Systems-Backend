@@ -325,29 +325,16 @@ class AIReceptionist:
                     "required": ["phone"]
                 }
             },
-            {
-                "name": "select_appointment_to_cancel",
-                "description": """Select which appointment to cancel when multiple appointments are found. Use when customer specifies which appointment they want (1, 2, 3, etc.). This function does NOT cancel appointments - it only selects which one. Use confirm_cancellation to actually cancel.""",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "event_id": {
-                            "type": "string",
-                            "description": "The number the customer provided (1, 2, 3, 4, etc.) to select which appointment they want to cancel"
-                        }
-                    },
-                    "required": ["event_id"]
-                }
-            },
+
             {
                 "name": "confirm_cancellation",
-                "description": """FINAL STEP: Execute the actual appointment cancellation when customer says YES/confirms. This is the ONLY function that actually cancels appointments. Use when customer confirms with words like 'yes', 'confirm', 'cancel it', etc. The function automatically retrieves the selected appointment from the conversation state.""",
+                "description": """Cancel appointment directly when customer confirms. Use when customer confirms they want to cancel a specific appointment number (1, 2, 3, 4). The customer saying 'yes' means they confirmed - just call this function with the appointment number they originally selected.""",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "event_id": {
                             "type": "string",
-                            "description": "Selection number (1, 2, 3, 4) after confirmation response (yes, confirm, cancel it)"
+                            "description": "The appointment number (1, 2, 3, 4) that the customer originally selected and confirmed they want to cancel"
                         }
                     },
                     "required": ["event_id"]
@@ -503,8 +490,7 @@ class AIReceptionist:
 
             elif function_name == "search_appointments_by_phone":
                 return self.search_appointments_by_phone_function(user_id=user_id, **arguments)
-            elif function_name == "select_appointment_to_cancel":
-                return self.select_appointment_to_cancel_function(user_id=user_id, **arguments)
+
             elif function_name == "confirm_cancellation":
                 return self.confirm_cancellation_function(user_id=user_id, **arguments)
             elif function_name == "collect_phone_for_booking":
@@ -800,12 +786,13 @@ class AIReceptionist:
             SIMPLIFIED CANCELLATION FLOW:
             1. When customer wants to cancel: Ask "What phone number did you book the appointment with?"
             2. When customer provides phone number: IMMEDIATELY call search_appointments_by_phone function with their phone number
-            3. If multiple appointments found: Customer selects one using select_appointment_to_cancel function
-            4. When customer confirms cancellation: Call confirm_cancellation function to execute the cancellation
+            3. When customer selects appointment number (1, 2, 3): Ask "Are you sure you want to cancel [appointment details]?"
+            4. When customer confirms (yes/confirm): IMMEDIATELY call confirm_cancellation function with the appointment number
             
             CRITICAL CANCELLATION RULES:
             - ALWAYS call search_appointments_by_phone function directly when customer provides phone number
-            - DO NOT say "let me search" or "one moment" - search immediately and show results
+            - When customer confirms cancellation: call confirm_cancellation with the ORIGINAL appointment number they selected
+            - DO NOT say "let me search" or "one moment" - search immediately and show results  
             - The search function handles phone normalization automatically (yes/texting from/etc.)
 
             CRITICAL SMS BOOKING RULES:
@@ -1090,32 +1077,34 @@ class AIReceptionist:
                 "auto_selected": False
             }
     
-    def select_appointment_to_cancel_function(self, event_id: str, user_id: str = None):
-        """Handle appointment selection for SMS cancellation"""
-        logger.info(f"🎯 SMS Cancellation - Selected appointment: {event_id}")
+
+    def confirm_cancellation_function(self, event_id: str, user_id: str = None):
+        """Handle direct SMS cancellation - customer already confirmed, just cancel the appointment"""
+        logger.info(f"🗑️ SMS Cancellation - Cancelling appointment {event_id} (customer already confirmed)")
         
         if not user_id:
             return {
                 "success": False,
-                "message": "Unable to process selection. Please try again.",
+                "message": "Unable to process cancellation. Please try again.",
                 "error": "No user ID available"
             }
         
-        # Get state machine for this user
+        # Get state machine for this user to access found appointments
         state_machine = self.get_cancellation_state_machine(user_id)
-        
-        # Validate that this appointment exists in our found appointments
         found_appointments = state_machine.get_found_appointments()
+        
+        if not found_appointments:
+            return {
+                "success": False,
+                "message": "No appointments found for cancellation. Please start over.",
+                "error": "No found_appointments in state machine"
+            }
+        
+        # Find the appointment to cancel based on event_id
         selected_appointment = None
         
-        # First, try to match by exact event_id
-        for appt in found_appointments:
-            if appt['calendar_event_id'] == event_id:
-                selected_appointment = appt
-                break
-        
-        # If not found by event_id, try to match by position number (1, 2, 3, etc.)
-        if not selected_appointment and event_id.isdigit():
+        # Try to match by position number (1, 2, 3, etc.)
+        if event_id.isdigit():
             try:
                 position = int(event_id) - 1  # Convert to 0-based index
                 if 0 <= position < len(found_appointments):
@@ -1124,24 +1113,16 @@ class AIReceptionist:
             except (ValueError, IndexError):
                 pass
         
-        # If still not found, try to match by service name or specialist
+        # If not found by position, try exact event_id match
         if not selected_appointment:
-            event_id_lower = event_id.lower()
             for appt in found_appointments:
-                service_name = appt.get('service_name', '').lower()
-                specialist = appt.get('specialist', '').lower()
-                
-                # Check if the event_id contains service name or specialist
-                if (service_name in event_id_lower or 
-                    event_id_lower in service_name or
-                    specialist in event_id_lower or
-                    event_id_lower in specialist):
+                if appt['calendar_event_id'] == event_id:
                     selected_appointment = appt
-                    logger.info(f"🎯 SMS Cancellation - Selected appointment by description match: {appt['calendar_event_id']}")
+                    logger.info(f"🎯 SMS Cancellation - Selected appointment by exact ID: {event_id}")
                     break
         
         if not selected_appointment:
-            # Log the available appointments for debugging
+            # Log available appointments for debugging
             available_appts = []
             for i, appt in enumerate(found_appointments, 1):
                 available_appts.append(f"{i}. {appt.get('service_name', 'Unknown')} with {appt.get('specialist', 'team')}")
@@ -1151,159 +1132,11 @@ class AIReceptionist:
             return {
                 "success": False,
                 "message": f"I'm sorry, I couldn't find that appointment. Please reply with the number (1, 2, 3, etc.) of the appointment you'd like to cancel.",
-                "error": "Appointment not found in search results",
-                "available_appointments": available_appts
+                "error": "Appointment not found in search results"
             }
         
-        # Use the actual event_id from the selected appointment
+        # Get the actual Google Calendar event ID and cancel directly
         actual_event_id = selected_appointment['calendar_event_id']
-        state_machine.add_collected_data("appointment_selection", actual_event_id)
-        
-        # Format appointment details for confirmation
-        date_str = datetime.strptime(selected_appointment['appointment_date'], '%Y-%m-%d').strftime('%A, %B %d, %Y')
-        time_str = datetime.strptime(selected_appointment['appointment_time'], '%H:%M').strftime('%I:%M %p')
-        
-        confirmation_message = (f"I found your {selected_appointment['service_name']} appointment on {date_str} at {time_str} "
-                               f"with {selected_appointment['specialist'] or 'our team'}. "
-                               f"Are you sure you want to cancel this appointment?")
-        
-        return {
-            "success": True,
-            "message": confirmation_message,
-            "selected_appointment": selected_appointment,
-            "event_id": actual_event_id
-        }
-    
-    def confirm_cancellation_function(self, event_id: str, user_id: str = None):
-        """Handle SMS cancellation with smart selection and confirmation logic"""
-        logger.info(f"🗑️ SMS Cancellation - Processing request with event_id: {event_id}")
-        
-        if not user_id:
-            return {
-                "success": False,
-                "message": "Unable to process cancellation. Please try again.",
-                "error": "No user ID available"
-            }
-        
-        # Get state machine for this user
-        state_machine = self.get_cancellation_state_machine(user_id)
-        
-        # Debug: Log current state machine data
-        logger.info(f"🔍 SMS Cancellation - State machine data: {state_machine.collected_data}")
-        logger.info(f"🔍 SMS Cancellation - Found appointments: {len(state_machine.found_appointments)}")
-        
-        # Check if appointment was already selected by select_appointment_to_cancel
-        actual_event_id = state_machine.collected_data.get("appointment_selection")
-        
-        # Determine if event_id is a confirmation word or selection number
-        is_confirmation = event_id.lower().strip() in ["yes", "y", "yeah", "confirm", "cancel it", "sure", "ok", "okay"]
-        
-        if actual_event_id and is_confirmation:
-            # Scenario A: Appointment already selected, customer is confirming
-            logger.info(f"✅ SMS Cancellation - Scenario A: Using pre-selected appointment {actual_event_id}")
-            
-        elif actual_event_id and not is_confirmation:
-            # Edge case: Appointment selected but customer provided another number
-            logger.info(f"⚠️ SMS Cancellation - Appointment already selected ({actual_event_id}), but customer provided {event_id}")
-            # Use the already selected appointment
-            
-        elif not actual_event_id and not is_confirmation:
-            # Scenario B: No appointment selected, event_id is selection number - do selection inline
-            logger.info(f"🎯 SMS Cancellation - Scenario B: No appointment pre-selected, selecting {event_id} inline")
-            
-            # Get found appointments from state machine
-            found_appointments = state_machine.get_found_appointments()
-            
-            if not found_appointments:
-                return {
-                    "success": False,
-                    "message": "No appointments found for selection. Please start over.",
-                    "error": "No found_appointments in state machine"
-                }
-            
-            # Convert event_id to appointment selection
-            selected_appointment = None
-            
-            # Try to match by position number (1, 2, 3, etc.)
-            if event_id.isdigit():
-                try:
-                    position = int(event_id) - 1  # Convert to 0-based index
-                    if 0 <= position < len(found_appointments):
-                        selected_appointment = found_appointments[position]
-                        logger.info(f"🎯 SMS Cancellation - Selected appointment by position {event_id}: {selected_appointment['calendar_event_id']}")
-                except (ValueError, IndexError):
-                    pass
-            
-            # If not found by position, try exact event_id match
-            if not selected_appointment:
-                for appt in found_appointments:
-                    if appt['calendar_event_id'] == event_id:
-                        selected_appointment = appt
-                        logger.info(f"🎯 SMS Cancellation - Selected appointment by exact ID: {event_id}")
-                        break
-            
-            # If still not found, try service name or specialist match
-            if not selected_appointment:
-                event_id_lower = event_id.lower()
-                for appt in found_appointments:
-                    service_name = appt.get('service_name', '').lower()
-                    specialist = appt.get('specialist', '').lower()
-                    
-                    if (service_name in event_id_lower or 
-                        event_id_lower in service_name or
-                        specialist in event_id_lower or
-                        event_id_lower in specialist):
-                        selected_appointment = appt
-                        logger.info(f"🎯 SMS Cancellation - Selected appointment by description match: {appt['calendar_event_id']}")
-                        break
-            
-            if not selected_appointment:
-                # Log available appointments for debugging
-                available_appts = []
-                for i, appt in enumerate(found_appointments, 1):
-                    available_appts.append(f"{i}. {appt.get('service_name', 'Unknown')} with {appt.get('specialist', 'team')}")
-                
-                logger.error(f"🎯 SMS Cancellation - Could not find appointment with event_id '{event_id}'. Available: {available_appts}")
-                
-                return {
-                    "success": False,
-                    "message": f"I'm sorry, I couldn't find that appointment. Please reply with the number (1, 2, 3, etc.) of the appointment you'd like to cancel.",
-                    "error": "Appointment not found in search results",
-                    "available_appointments": available_appts
-                }
-            
-            # Populate state machine with selected appointment (instead of calling separate function)
-            actual_event_id = selected_appointment['calendar_event_id']
-            state_machine.add_collected_data("appointment_selection", actual_event_id)
-            logger.info(f"🎯 SMS Cancellation - Populated state machine with appointment: {actual_event_id}")
-            
-            # Format appointment details for confirmation
-            date_str = datetime.strptime(selected_appointment['appointment_date'], '%Y-%m-%d').strftime('%A, %B %d, %Y')
-            time_str = datetime.strptime(selected_appointment['appointment_time'], '%H:%M').strftime('%I:%M %p')
-            
-            confirmation_message = (f"Are you sure you want to cancel your {selected_appointment['service_name']} appointment "
-                                   f"on {date_str} at {time_str} with {selected_appointment['specialist'] or 'our team'}? "
-                                   f"Reply with 'yes' to confirm.")
-            
-            # Return confirmation request - don't actually cancel yet
-            return {
-                "success": True,
-                "requires_confirmation": True,
-                "message": confirmation_message,
-                "selected_appointment": selected_appointment,
-                "event_id": actual_event_id
-            }
-            
-        else:
-            # Scenario C: No appointment selected and customer said "yes" - error state
-            logger.error(f"❌ SMS Cancellation - Customer confirmed but no appointment selected")
-            return {
-                "success": False,
-                "message": "No appointment selected for cancellation. Please start over by providing your phone number.",
-                "error": "No appointment_selection in state machine"
-            }
-        
-        # At this point, we have a valid actual_event_id and are ready to cancel
         logger.info(f"🗑️ SMS Cancellation - Proceeding with cancellation of event_id: {actual_event_id}")
         
         # Use the appointment service for validated cancellation
