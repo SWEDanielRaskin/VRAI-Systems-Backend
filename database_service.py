@@ -238,7 +238,7 @@ class DatabaseService:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS oauth_credentials (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    provider TEXT NOT NULL,  -- 'google', 'stripe', etc.
+                    provider TEXT NOT NULL,  -- 'google' or 'square'
                     access_token TEXT NOT NULL,
                     refresh_token TEXT,
                     expires_at INTEGER,
@@ -248,9 +248,6 @@ class DatabaseService:
                     updated_at TEXT NOT NULL
                 )
             ''')
-            
-            # Migrate oauth_credentials table if needed (add missing columns)
-            self._migrate_oauth_credentials_table(cursor)
             
             # Client calendar settings table
             cursor.execute('''
@@ -380,47 +377,6 @@ class DatabaseService:
                 
         except Exception as e:
             logger.error(f"❌ Error migrating appointments table: {str(e)}")
-    
-    def _migrate_oauth_credentials_table(self, cursor):
-        """Migrate oauth_credentials table to add missing columns if needed"""
-        try:
-            # Get current columns in oauth_credentials table
-            cursor.execute("PRAGMA table_info(oauth_credentials)")
-            existing_columns = [row[1] for row in cursor.fetchall()]
-            
-            # Define required columns and their types
-            required_columns = {
-                'id': 'INTEGER PRIMARY KEY AUTOINCREMENT',
-                'provider': 'TEXT NOT NULL',
-                'access_token': 'TEXT NOT NULL',
-                'refresh_token': 'TEXT',
-                'expires_at': 'INTEGER',
-                'scope': 'TEXT',
-                'client_id': 'TEXT',
-                'created_at': 'TEXT NOT NULL',
-                'updated_at': 'TEXT NOT NULL'
-            }
-            
-            # Check which columns are missing
-            missing_columns = []
-            for column_name, column_type in required_columns.items():
-                if column_name not in existing_columns and column_name != 'id':  # Skip primary key
-                    missing_columns.append((column_name, column_type))
-            
-            if missing_columns:
-                logger.info(f"🔧 Migrating oauth_credentials table: adding {len(missing_columns)} missing columns...")
-                for column_name, column_type in missing_columns:
-                    try:
-                        cursor.execute(f"ALTER TABLE oauth_credentials ADD COLUMN {column_name} {column_type}")
-                        logger.info(f"✅ Added column: {column_name} ({column_type})")
-                    except Exception as e:
-                        logger.error(f"❌ Failed to add column {column_name}: {str(e)}")
-                logger.info("✅ OAuth credentials table migration completed")
-            else:
-                logger.info("✅ OAuth credentials table is up to date")
-                
-        except Exception as e:
-            logger.error(f"❌ Error migrating oauth_credentials table: {str(e)}")
     
     # Settings CRUD operations
     def get_setting(self, key: str) -> Optional[str]:
