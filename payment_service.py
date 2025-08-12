@@ -21,7 +21,7 @@ class PaymentService:
         self.webhook_secret = os.getenv('STRIPE_WEBHOOK_SECRET')
         
         # Default deposit amount (in cents)
-        self.default_deposit_amount = 5000  # $50.00
+        self.default_deposit_amount = 500  # $5.00
         
         # Store payment records locally for tracking
         self.payments_file = 'payments.json'
@@ -138,10 +138,10 @@ class PaymentService:
         """
         # Service-specific deposits (in cents)
         service_deposits = {
-            'botox': 5000,           # $50
-            'hydrafacial': 5000,     # $50
-            'laser_hair_removal': 5000,  # $50
-            'microneedling': 5000,   # $50
+            'botox': 500,           # $5
+            'hydrafacial': 500,     # $5
+            'laser_hair_removal': 500,  # $5
+            'microneedling': 500,   # $5
         }
         
         return service_deposits.get(service, self.default_deposit_amount)
