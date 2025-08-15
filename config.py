@@ -2,9 +2,9 @@ import os #my ahh
 from datetime import datetime
 
 # Business Information
-BUSINESS_NAME = "Carla Thomas Med Spa"
-BUSINESS_FULL_NAME = "Carla Thomas Med Spa"
-BUSINESS_WEBSITE = "https://www.carlathomasmedspa.com/"
+BUSINESS_NAME = "VRAI Systems Med Spa"
+BUSINESS_FULL_NAME = "VRAI Systems Med Spa"
+BUSINESS_WEBSITE = "https://www.vraisystems.org"
 BUSINESS_DESCRIPTION = "Med Spa"
 
 # Timezone Configuration
