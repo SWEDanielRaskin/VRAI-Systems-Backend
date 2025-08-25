@@ -2,9 +2,9 @@ import os #my ahh
 from datetime import datetime
 
 # Business Information
-BUSINESS_NAME = "AMH Chiropractic at Canton"
-BUSINESS_FULL_NAME = "Applied Modern Health at Canton"
-BUSINESS_WEBSITE = "https://amhchiropractic.com/"
+BUSINESS_NAME = "Tenafly Chiropractic Center"
+BUSINESS_FULL_NAME = "Tenafly Chiropractic Center"
+BUSINESS_WEBSITE = "https://tenaflychiropracticcenter.com/"
 BUSINESS_DESCRIPTION = "Chiropractic"
 
 # Timezone Configuration
