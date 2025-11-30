@@ -4,7 +4,7 @@ This project is the backend infrastructure for **VRAI Systems**, a production-re
 
 ## Case Study
 
-For a detailed breakdown of the project's architecture, challenges, and impact, check out the [full case study](https://deltarsystems.com/about/casestudies/vraisystems).
+To visit this product's page on my company website, check out the [case study](https://deltarsystems.com/about/casestudies/vraisystems).
 
 <img width="1400" alt="VRAI Systems Dashboard" src="vrai-systems-screenshot.png">
 
