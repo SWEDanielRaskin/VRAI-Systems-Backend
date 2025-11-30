@@ -44,9 +44,6 @@ ensure_database_directories()
 # Project Configuration
 PROJECT_NAME = "medspa-dashboard"
 
-# Login Configuration
-LOGIN_PASSWORD = "radiance2024"
-
 # Page Titles
 PAGE_TITLES = {
     "dashboard": "{business_name} - Dashboard",

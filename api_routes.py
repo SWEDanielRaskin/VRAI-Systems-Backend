@@ -83,13 +83,27 @@ db = DatabaseService()
 kb_service = KnowledgeBaseService(database_service=db)
 
 # Authentication configuration
-JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = 24
 
-# Client credentials (in production, these should be in environment variables)
-CLIENT_USERNAME = os.getenv('CLIENT_USERNAME', 'carlathomas')
-CLIENT_PASSWORD = os.getenv('CLIENT_PASSWORD', 'hti89pqc')
+# Validate that JWT secret is set (fail fast if missing)
+if not JWT_SECRET_KEY:
+    raise ValueError(
+        "JWT_SECRET_KEY environment variable must be set. "
+        "This is required for secure token generation and validation."
+    )
+
+# Client credentials - MUST be set via environment variables
+CLIENT_USERNAME = os.getenv('CLIENT_USERNAME')
+CLIENT_PASSWORD = os.getenv('CLIENT_PASSWORD')
+
+# Validate that credentials are set (fail fast if missing)
+if not CLIENT_USERNAME or not CLIENT_PASSWORD:
+    raise ValueError(
+        "CLIENT_USERNAME and CLIENT_PASSWORD environment variables must be set. "
+        "These credentials are required for authentication."
+    )
 
 # Google OAuth configuration
 GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID')
