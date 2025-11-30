@@ -36,6 +36,21 @@ from config import BUSINESS_FULL_NAME, PYTZ_TIMEZONE
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Validate required environment variables
+TELNYX_NUMBER = os.getenv('TELNYX_NUMBER')
+FORWARD_NUMBER = os.getenv('FORWARD_NUMBER')
+
+if not TELNYX_NUMBER:
+    raise ValueError(
+        "TELNYX_NUMBER environment variable must be set. "
+        "This is the business phone number for SMS/calls."
+    )
+if not FORWARD_NUMBER:
+    raise ValueError(
+        "FORWARD_NUMBER environment variable must be set. "
+        "This is the front desk phone number for call transfers."
+    )
+
 app = Flask(__name__)
 
 # Enable CORS for all routes - support both local development and production
@@ -325,8 +340,8 @@ def inbound_call():
             is_business_hours = get_business_hours_status()
             
             # FIXED: More robust filtering of outbound call.answered events
-            front_desk_number = os.getenv('FORWARD_NUMBER', '+13132044895')
-            business_number = os.getenv('TELNYX_NUMBER', '+18773900002')
+            front_desk_number = FORWARD_NUMBER
+            business_number = TELNYX_NUMBER
             
             # Skip if this is an outbound call leg (transfer-created call)
             if (payload.get('direction') == 'outgoing' or 
@@ -381,7 +396,7 @@ def inbound_call():
 
         elif event_type in ['call.hangup', 'call.ended']:
             # Handle call completion - only for original inbound calls
-            front_desk_number = os.getenv('FORWARD_NUMBER', '+13132044895')
+            front_desk_number = FORWARD_NUMBER
             
             # Skip processing hangup events for transfer legs to front desk
             if called_number == front_desk_number:
@@ -431,8 +446,8 @@ def find_original_call_id(current_call_id, payload):
         # The original call will have direction='incoming' in the session
         
         # If this is a call TO the front desk, it's likely a transfer leg
-        front_desk_number = os.getenv('FORWARD_NUMBER', '+13132044895')
-        business_number = os.getenv('TELNYX_NUMBER', '+18773900002')
+        front_desk_number = FORWARD_NUMBER
+        business_number = TELNYX_NUMBER
         
         # Check if this is a transfer leg (call TO front desk)
         if payload.get('to') == front_desk_number:
@@ -465,7 +480,7 @@ def transfer_to_front_desk(call_control_id, original_called_number, original_cal
     try:
         import requests
         
-        front_desk_number = os.getenv('FORWARD_NUMBER', '+13132044895')
+        front_desk_number = FORWARD_NUMBER
         
         # Use the transfer action - this is the correct API for call forwarding
         transfer_url = f"https://api.telnyx.com/v2/calls/{call_control_id}/actions/transfer"
@@ -530,7 +545,7 @@ def bridge_to_front_desk(call_control_id, original_called_number):
     try:
         import requests
         
-        front_desk_number = os.getenv('FORWARD_NUMBER', '+13132044895')
+        front_desk_number = FORWARD_NUMBER
         
         # Use the bridge action with proper parameters
         bridge_url = f"https://api.telnyx.com/v2/calls/{call_control_id}/actions/bridge"
@@ -808,7 +823,7 @@ def is_appointment_confirmation_message(message_text: str, from_number: str, to_
     """
     try:
         # Check if this is from business to customer (confirmation direction)
-        business_number = "+18773900002"
+        business_number = TELNYX_NUMBER
         if from_number != business_number:
             return False
         
@@ -1510,8 +1525,8 @@ def test_call_forwarding():
         is_business_hours = get_business_hours_status()
         
         # Get phone numbers
-        telnyx_number = os.getenv('TELNYX_NUMBER', '+18773900002')
-        front_desk_number = os.getenv('FORWARD_NUMBER', '+13132044895')
+        telnyx_number = TELNYX_NUMBER
+        front_desk_number = FORWARD_NUMBER
         
         # Create test response
         response_data = {

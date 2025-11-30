@@ -223,4 +223,9 @@ test_*.py
 test_auth.py
 
 # User uploads (customer photos, business info)
-uploads/ 
+uploads/
+
+# Data files (may contain sensitive customer data)
+appointments.json
+payments.json
+specialist_counter.json 

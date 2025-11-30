@@ -1,6 +1,15 @@
 import sqlite3
 import logging
+import os
 from config import DATABASE_NAME
+
+# Validate required environment variable
+FORWARD_NUMBER = os.getenv('FORWARD_NUMBER')
+if not FORWARD_NUMBER:
+    raise ValueError(
+        "FORWARD_NUMBER environment variable must be set. "
+        "This is required for identifying transfer leg calls."
+    )
 
 def cleanup_transfer_legs():
     """Remove transfer leg entries from the calls table"""
@@ -9,7 +18,7 @@ def cleanup_transfer_legs():
         cursor = conn.cursor()
         
         # Find transfer leg entries (calls to front desk number)
-        front_desk_number = '+13132044895'
+        front_desk_number = FORWARD_NUMBER
         
         # Get all calls to front desk
         cursor.execute('''
