@@ -108,7 +108,7 @@ if not CLIENT_USERNAME or not CLIENT_PASSWORD:
 # Google OAuth configuration
 GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID')
 GOOGLE_OAUTH_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET')
-GOOGLE_OAUTH_REDIRECT_URI = os.getenv('GOOGLE_OAUTH_REDIRECT_URI', 'https://vraisystems.up.railway.app/api/oauth/google/callback')
+GOOGLE_OAUTH_REDIRECT_URI = os.getenv('GOOGLE_OAUTH_REDIRECT_URI')
 
 # OAuth scopes for Google Calendar
 GOOGLE_OAUTH_SCOPES = [
@@ -1430,7 +1430,7 @@ def google_oauth_callback():
         
         if success:
             # Redirect to frontend success page
-            frontend_url = os.getenv('FRONTEND_URL', 'https://vraisystems.netlify.app')
+            frontend_url = os.getenv('FRONTEND_URL')
             return redirect(f"{frontend_url}/oauth-success.html?provider=google")
         else:
             return jsonify({'error': 'Failed to store credentials'}), 500
