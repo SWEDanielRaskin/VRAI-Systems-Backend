@@ -209,4 +209,18 @@ build/
 
 # Credentials and sensitive files
 google-calendar-credentials.json
-credentials/ 
+credentials/
+
+# Debug logging files
+* logs.txt
+websocket_server.py logs.txt
+main.py logs.txt
+app.py logs.txt
+
+# Test files and test content
+test_knowledge_content.txt
+test_*.py
+test_auth.py
+
+# User uploads (customer photos, business info)
+uploads/ 
